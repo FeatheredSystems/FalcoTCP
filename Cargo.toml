@@ -1,7 +1,15 @@
 [package]
-name = "FalcoTCP"
+name = "falcotcp"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["thread"]
+thread = []
+tokio-runtime = ["tokio"]
+async-std-runtime = ["async-std"]
+
 [dependencies]
 aes-gcm = "0.10.3"
+tokio = { version = "1", optional = true, features = ["full"] }
+async-std = { version = "1", optional = true, features = ["attributes"] }
