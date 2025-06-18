@@ -18,10 +18,10 @@ pub struct Server{
 pub type MessageHandler = Box<dyn Fn(Vec<u8>) -> Vec<u8> + Send + Sync + 'static>;
 impl Server{
     
-    pub fn new(host : String, password : [u8;32],message_handler : MessageHandler) -> Result<Self,Error>{
+    pub fn new(host : String, password : [u8;32],message_handler : MessageHandler,workers : usize) -> Result<(),Error>{
         let aesgcm: AesGcm<aes_gcm::aes::Aes256, aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UTerm, aes_gcm::aead::consts::B1>, aes_gcm::aead::consts::B1>, aes_gcm::aead::consts::B0>, aes_gcm::aead::consts::B0>> = Aes256Gcm::new(&GenericArray::from_slice(&password));
         let listener: Arc<TcpListener> = Arc::new(TcpListener::bind(&host)?);
-        Ok(Server { listener, message_handler, aesgcm})
+        Server::start(Arc::new(Server { listener, message_handler, aesgcm}),workers)
     }
     pub fn start(self : Arc<Server>,workers : usize) -> Result<(),std::io::Error>{
 
@@ -53,7 +53,6 @@ impl Server{
                         cc_changed = true;
                     }
                     let mut delete : Vec<usize> = Vec::new();
-                    let mut to_delete = false;
                     let mut iter = connections.iter_mut().enumerate();
                     let mut current : Option<usize> = None;
                     while let Some ((index,connection)) = iter.next(){
@@ -62,7 +61,6 @@ impl Server{
                         // }
                         if let Ok(dur) = connection_health.get(&connection.1).unwrap().elapsed(){
                             if dur.as_secs() > 60{
-                                to_delete = true;
                                 delete.push(index);
                                 connection.2 = false;
                             }
@@ -151,7 +149,7 @@ impl Server{
                         
                     }
                     
-                    if to_delete{
+                    if delete.len() > 0{
                         for i in delete{
                             let tuple = connections.remove(i);
                             let _ = tuple.0.shutdown(Shutdown::Both);
@@ -226,7 +224,7 @@ pub struct Client{
     aesgcm : Aes256Gcm,
 }
 impl Client{
-    pub fn new(password : [u8;32], address : &str, timeout : u64) -> Result<Client,Error>{
+    pub fn new(address : &str, password : [u8;32], timeout : u64) -> Result<Client,Error>{
         let address = match std::net::SocketAddr::from_str(address){Ok(a)=>a,Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string()))};
         let mut stream = TcpStream::connect_timeout(&address,Duration::from_secs(timeout))?;
         stream.set_write_timeout(Some(Duration::from_secs(timeout)))?;
