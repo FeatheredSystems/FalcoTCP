@@ -165,6 +165,7 @@ impl Server{
             });
         }
         let timeout = Duration::from_secs(1);
+        println!("Server running...");
         loop {
             let con = self.listener.accept().unwrap();
             let mut stream = con.0;
@@ -224,10 +225,10 @@ pub struct Client{
     aesgcm : Aes256Gcm,
 }
 impl Client{
-    pub fn new(address : &str, password : [u8;32], timeout : u64) -> Result<Client,Error>{
+    pub fn new(address : &str, password : [u8;32]) -> Result<Client,Error>{
         let address = match std::net::SocketAddr::from_str(address){Ok(a)=>a,Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string()))};
-        let mut stream = TcpStream::connect_timeout(&address,Duration::from_secs(timeout))?;
-        stream.set_write_timeout(Some(Duration::from_secs(timeout)))?;
+        let mut stream = TcpStream::connect_timeout(&address,Duration::from_secs(1))?;
+        stream.set_write_timeout(Some(Duration::from_secs(1)))?;
         let mut payload = vec![];
 
         payload.extend_from_slice(&[0u8]);
@@ -258,13 +259,17 @@ impl Client{
         stream.write(&payload.as_slice())?;
         stream.flush()?;
         let mut bytes = [0u8;1];
+        
 
         stream.read_exact(&mut bytes)?;
+        println!("{:?}",bytes);
         let success = bytes[0] == 255;
+        
         if success{
             return Ok(Client{stream,aesgcm})
+        }else{
+            Err(Error::new(ErrorKind::ConnectionRefused, "Invalid password"))
         }
-        Err(Error::new(ErrorKind::ConnectionRefused, "Invalid password"))
     }
     pub fn message(&mut self,bytes : Vec<u8>) -> Result<Vec<u8>, Error>{
         let l = bytes.len();

@@ -282,7 +282,7 @@ impl Client{
         let mut stream = TcpStream::connect(&address).await?;
         let mut payload = vec![];
 
-        payload.push(0u8); // Authentication request type
+        payload.push(0u8); 
 
         let nonce = {
             let mut dest: [u8; 12] = [0u8;12];
