@@ -4,7 +4,7 @@ version = "0.1.2"
 edition = "2024"
 description = "Secure TCP server/client with AES-256-GCM encryption, authentication, and messaging. Ideal for trusted communication between services, with sync/async worker balancing."
 repository = "https://github.com/FeatheredSystems/FalcoTCP"
-documentation = "falcotcp-docs.pages.dev/"
+documentation = "https://falcotcp-docs.pages.dev/"
 license = "Apache-2.0"
 
 [features]
