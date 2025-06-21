@@ -12,7 +12,7 @@ When the server receives a message from the client, it decrypts the message (eve
 Currently, it has only a single connection handler in Rust, but in the future, I might implement it for both Python and Go.
 
 ## Documentation
-[not ready yet]
+[https://falcotcp-docs.pages.dev/](https://falcotcp-docs.pages.dev/)
 
 ## Contributions
 Contributions are not accepted for this project.
