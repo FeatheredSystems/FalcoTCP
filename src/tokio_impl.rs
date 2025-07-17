@@ -1,5 +1,6 @@
 use std::{collections::HashMap, io::{Error, ErrorKind}, str::FromStr, sync::Arc, time::Duration};
 use std::time::SystemTime;
+use std::pin::Pin;
 
 use aes_gcm::{aead::{generic_array::GenericArray, rand_core::RngCore, Aead, OsRng, Payload}, Aes256Gcm, AesGcm, KeyInit};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::{mpsc::{channel, Receiver, Sender}, Mutex}, time::timeout};
@@ -14,10 +15,15 @@ pub enum RequestType{
 
 pub struct Server{
     aesgcm : AesGcm<aes_gcm::aes::Aes256, aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UTerm, aes_gcm::aead::consts::B1>, aes_gcm::aead::consts::B1>, aes_gcm::aead::consts::B0>, aes_gcm::aead::consts::B0>>,
-    message_handler: Box<dyn Fn(Vec<u8>) -> Vec<u8> + Send + Sync + 'static>,
+    message_handler: MessageHandler,
     listener : Arc<TcpListener>
 }
-pub type MessageHandler = Box<dyn Fn(Vec<u8>) -> Vec<u8> + Send + Sync + 'static>;
+pub type MessageHandler = Arc<
+    dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>
+        + Send
+        + Sync
+        + 'static,
+>;
 
 impl Server{
     pub async fn new(host : String, password : [u8;32],message_handler : MessageHandler,workers : usize) -> Result<(),Error>{
@@ -162,7 +168,7 @@ impl Server{
                             };
                             
 
-                            let response = (server.message_handler)(payload);
+                            let response = (server.message_handler)(payload).await;
                             let nonce = {
                                 let mut dest: [u8; 12] = [0u8;12];
                                 OsRng::fill_bytes(&mut OsRng, &mut dest);
@@ -177,7 +183,7 @@ impl Server{
                                 response_payload.extend_from_slice(&nonce);
                                 response_payload.extend_from_slice(&encrypted);
                                 
-                                if let Err(e) = stream.write_all(&response_payload).await {
+                                if let Err(_e) = stream.write_all(&response_payload).await {
                                     delete.push(index);
                                     connection.2 = false;
                                 }
@@ -215,8 +221,7 @@ impl Server{
             let mut stream = stream;
 
             let mut request_type_buffer = [0u8;1];
-            if let Err(e) = stream.read_exact(&mut request_type_buffer).await {
-                
+            if let Err(_e) = stream.read_exact(&mut request_type_buffer).await { 
                 continue;
             };
 

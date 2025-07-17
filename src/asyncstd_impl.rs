@@ -1,6 +1,7 @@
 use std::{collections::HashMap, io::{Error, ErrorKind}, str::FromStr, sync::Arc, time::Duration};
 use std::time::SystemTime;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::pin::Pin;
 use async_std::{
     io::{ReadExt, WriteExt}, 
     net::{TcpListener, TcpStream}, 
@@ -19,11 +20,16 @@ pub enum RequestType {
 
 pub struct Server {
     aesgcm: AesGcm<aes_gcm::aes::Aes256, aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UInt<aes_gcm::aes::cipher::typenum::UTerm, aes_gcm::aead::consts::B1>, aes_gcm::aead::consts::B1>, aes_gcm::aead::consts::B0>, aes_gcm::aead::consts::B0>>,
-    message_handler: Box<dyn Fn(Vec<u8>) -> Vec<u8> + Send + Sync + 'static>,
+    message_handler: MessageHandler,
     listener: Arc<TcpListener>
 }
 
-pub type MessageHandler = Box<dyn Fn(Vec<u8>) -> Vec<u8> + Send + Sync + 'static>;
+pub type MessageHandler = Arc<
+    dyn Fn(Vec<u8>) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>
+        + Send
+        + Sync
+        + 'static,
+>;
 
 impl Server {
     pub async fn new(host: String, password: [u8; 32], message_handler: MessageHandler,workers : usize) -> Result<(), Error> {
@@ -158,7 +164,7 @@ impl Server {
                                 }
                             };
                             
-                            let response = (server.message_handler)(payload);
+                            let response = (server.message_handler)(payload).await;
                             let nonce = {
                                 let mut dest: [u8; 12] = [0u8; 12];
                                 OsRng::fill_bytes(&mut OsRng, &mut dest);
