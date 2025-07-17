@@ -1,6 +1,6 @@
 [package]
 name = "falcotcp"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 description = "Secure TCP server/client with AES-256-GCM encryption, authentication, and messaging. Ideal for trusted communication between services, with sync/async worker balancing."
 repository = "https://github.com/FeatheredSystems/FalcoTCP"
