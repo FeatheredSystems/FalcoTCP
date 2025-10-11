@@ -2,18 +2,17 @@
 name = "falcotcp"
 version = "0.1.4"
 edition = "2024"
-description = "Secure TCP server/client with AES-256-GCM encryption, authentication, and messaging. Ideal for trusted communication between services, with sync/async worker balancing."
+description = "TCP server/client with AES-256-GCM encryption."
 repository = "https://github.com/FeatheredSystems/FalcoTCP"
 documentation = "https://falcotcp-docs.pages.dev/"
 license = "Apache-2.0"
 
 [features]
-default = ["thread"]
-thread = []
+default = []
 tokio-runtime = ["tokio"]
-async-std-runtime = ["async-std"]
 
 [dependencies]
 aes-gcm = "0.10.3"
-tokio = { version = "1", optional = true, features = ["full"] }
-async-std = { version = "1", optional = true, features = ["attributes"] }
+cc = "1.2.41"
+libc = "0.2.177"
+tokio = {version="1.47.1",features=["full"], optional=true}
