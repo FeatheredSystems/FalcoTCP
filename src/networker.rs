@@ -1,12 +1,45 @@
-use libc::c_longlong;
 use std::io::{Error, ErrorKind};
-use std::mem;
 use std::net::Ipv4Addr;
 use std::os::raw::{c_char, c_int, c_uchar, c_ushort};
 use std::ptr;
-use std::sync::Mutex;
-use std::thread::{spawn, yield_now};
 
+#[cfg(not(feature = "tokio-runtime"))]
+use std::sync::Mutex;
+
+#[cfg(feature = "tokio-runtime")]
+use tokio::sync::Mutex;
+
+/// A TCP server that uses io_uring for I/O operations.
+///
+/// `Networker` wraps a C implementation that uses Linux's io_uring to handle multiple client connections.
+/// The server operates in cycles, where each cycle processes pending I/O operations for all connected clients.
+///
+/// # Structure
+///
+/// The networker allocates a fixed number of client slots during initialization. Each slot can hold one
+/// client connection and tracks that connection's state through the request-response lifecycle.
+///
+/// # Concurrency
+///
+/// This structure implements `Send` and `Sync`. Internal operations use a mutex to coordinate access
+/// to the underlying C structures and client state.
+///
+/// # Features
+///
+/// When the `tokio-runtime` feature is enabled, methods like `cycle()` and `get_client()` become async
+/// and integrate with the Tokio runtime. Without this feature, these methods are synchronous.
+///
+/// # Panics
+///
+/// Methods `cycle()` and `get_client()` panic if called on an uninitialized `Networker`.
+/// Use `Networker::new()` to initialize before calling these methods. `Networker::default()`
+/// creates an uninitialized instance.
+///
+/// # Safety
+///
+/// This structure wraps C FFI calls and manages raw pointers. Safety is maintained through
+/// state management and the internal mutex.
+///
 pub struct Networker {
     primitive_self: RawNetworker,
     mutex: Mutex<()>,
@@ -40,7 +73,6 @@ impl Networker {
             return Err(Error::new(ErrorKind::InvalidInput, "Invalid IPv4 host"));
         }
         let mut raw_net = RawNetworker::default();
-
         let mut raw_host: [i8; 12] = [0i8; 12];
         let b = host.as_bytes();
         if b.len() != 12 {
@@ -82,6 +114,7 @@ impl Networker {
     ///
     /// # Panic
     /// It panics if you forget to initialize your networker
+    #[cfg(not(feature = "tokio-runtime"))]
     pub fn cycle(&mut self) {
         if self.initilized != 1 {
             panic!("You forgot to initialize your networker :)")
@@ -89,16 +122,67 @@ impl Networker {
         unsafe { cycle(&mut self.primitive_self as *mut RawNetworker) };
     }
 
+    #[cfg(feature = "tokio-runtime")]
+    /// The networker runs in cycles, moving to the next one require this function being called
+    ///
+    /// I suggest you to have a loop running this during the entire program if you need full uptime
+    ///
+    /// # Panic
+    /// It panics if you forget to initialize your networker
+    pub async fn cycle(&mut self) -> Result<(), Error> {
+        if self.initilized != 1 {
+            panic!("You forgot to initialize your networker :)")
+        }
+        let pointer = (&mut self.primitive_self) as *mut RawNetworker as usize;
+        let a = tokio::task::spawn_blocking(move || unsafe { cycle(pointer as *mut RawNetworker) })
+            .await;
+        match a {
+            Ok(c) => {
+                if c < 0 {
+                    return Err(Error::from_raw_os_error(c));
+                }
+            }
+            Err(e) => return Err(e.into()),
+        }
+        Ok(())
+    }
+
     /// Return a client struct so you can run operations
     ///
     /// # Panic
     /// Panics if you forget to initialize your networker
+    #[cfg(not(feature = "tokio-runtime"))]
     pub fn get_client(&mut self) -> Option<ClientHandler> {
         if self.initilized != 1 {
             panic!("You forgot to initialize your networker :)")
         }
+        let mut _l = self.mutex.lock().unwrap();
         let a = unsafe { get_client(&mut self.primitive_self) };
         if a.exists > 0 {
+            unsafe { claim_client(&mut self.primitive_self, a.client.read().id) };
+            drop(_l);
+            return Some(ClientHandler {
+                inner: a.client,
+                owner: &mut self.primitive_self,
+                mutex: &mut self.mutex,
+            });
+        }
+        None
+    }
+    #[cfg(feature = "tokio-runtime")]
+    /// Return a client struct so you can run operations
+    ///
+    /// # Panic
+    /// Panics if you forget to initialize your networker
+    pub async fn get_client(&mut self) -> Option<ClientHandler> {
+        if self.initilized != 1 {
+            panic!("You forgot to initialize your networker :)")
+        }
+        let mut _l = self.mutex.lock().await;
+        let a = unsafe { get_client(&mut self.primitive_self) };
+        if a.exists > 0 {
+            unsafe { claim_client(&mut self.primitive_self, a.client.read().id) };
+            drop(_l);
             return Some(ClientHandler {
                 inner: a.client,
                 owner: &mut self.primitive_self,
@@ -111,64 +195,6 @@ impl Networker {
 
 unsafe impl Sync for Networker {}
 unsafe impl Send for Networker {}
-
-/*
-````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````
-``````````````````````````````````````````````````‹`````````````````````````````````````````````````
-`````````````````````````````````````````````¯36666663¯`````````````````````````````````````````````
-``````````````````````````````````````````‡66666666666666‡``````````````````````````````````````````
-```````````````````````````````````````‡66666666666666666666‡```````````````````````````````````````
-````````````````````````````````````‡66666666666666666666666666‡````````````````````````````````````
-````````````````````````````````*ü66666666666666666666666666666666ü*````````````````````````````````
-`````````````````````````````l6666666666666666666666666666666666666666l`````````````````````````````
-``````````````````````````‡6666666666666666666666666666666666666666666666l``````````````````````````
-``````````````````````‹36666666666666666666ü‡*‹``````‹*‡ü66666666666666666663```````````````````````
-```````````````````*ü66666666666666666ü‹````````````````````‹ü66666666666666666ü*```````````````````
-````````````````l66666666666666666ül````````````````````````````lü66666666666666666*````````````````
-`````````````l666666666666666666l``````````````````````````````````l666666666666666666l`````````````
-```````````3666666666666666666¯``````````````````````````````````````¯6666666666666666ÇGÇ```````````
-``````````¯66666666666666666‡``````````````````````````````````````````l66666666666ÇGggggl``````````
-``````````¯666666666666666ü``````````````````````````````````````````````3666666ÇGgggggggl``````````
-``````````¯66666666666666l````````````````````````````````````````````````l6ÇÞGggggggggggl``````````
-``````````¯6666666666666l````````````````````````‹‹```````````````````````*Ggggggggggggggl``````````
-``````````¯666666666666l```````````````````‡666666666666‡``````````````¯gggggggggggggggggl``````````
-``````````¯66666666666‡`````````````````‹66666666666666666ü‹````````*Þgggggggggggggggggggl``````````
-``````````¯6666666666ü`````````````````ü66666666666666666666ü````‡Gggggggggggggggggggggggl``````````
-``````````¯6666666666*```````````````‹66666666666666666666666ÇÞGgggggggggggggggggggggggggl``````````
-``````````¯6666666666````````````````666666666666666666666Þggggggggggggggggggggggggggggggl``````````
-``````````¯666666666ü```````````````666666666666666666ÇÞgggggggggggggggggggggggggggggggggl``````````
-``````````¯6666666663```````````````666666666666666ÇGggggggggggggggggggggggggggggggggggggl``````````
-``````````¯6666666663``````````````¯666666666666Çggggggggggggggggggggggggggggggggggggggggl``````````
-``````````¯6666666663```````````````66666666ÇÞgÅÅÅÅÅgggggggggggggggggggggggggggggggggggggl``````````
-``````````¯666666666ü```````````````66666ÇGgÅÅÅÅÅÅÅÅÅÅÅÅgggggggggggggggggggggggggggggggggl``````````
-``````````¯666666666ü````````````````6ÇgÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅggggggggggggggggggggggggggggggl``````````
-``````````¯6666666666*```````````````‡ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅGGgggggggggggggggggggggggggl``````````
-``````````¯6666666666ü````````````````¯ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅ¯```¯6ggggggggggggggggggggggl``````````
-``````````¯66666666666‡`````````````````‡ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅ‡`````````‡Gggggggggggggggggggl``````````
-``````````¯666666666666l```````````````````ÞÅÅÅÅÅÅÅÅÅÅÅÅÞ```````````````lggggggggggggggggl``````````
-``````````¯66666666666ÇGü``````````````````````‹l‡3l‹``````````````````````Þgggggggggggggl``````````
-``````````¯66666666ÇGÅÅÅÅ6````````````````````````````````````````````````6ÅÅÅÅggggggggggl``````````
-``````````¯66666ÇgÅÅÅÅÅÅÅÅg``````````````````````````````````````````````gÅÅÅÅÅÅÅÅgggggggl``````````
-``````````¯66ÞÅÅÅÅÅÅÅÅÅÅÅÅÅÅÇ``````````````````````````````````````````ÇÅÅÅÅÅÅÅÅÅÅÅÅÅggggl``````````
-```````````ÞÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅl``````````````````````````````````````lÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÞ```````````
-`````````````6ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅü``````````````````````````````````üÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅ6`````````````
-````````````````3ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅü````````````````````````````ügÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅ3````````````````
-```````````````````‡ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅgl````````````````````*gÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅ3```````````````````
-``````````````````````*ÞÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÞ3l¯````¯l3ÞÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÞ*``````````````````````
-``````````````````````````6ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅ6``````````````````````````
-`````````````````````````````üÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅü`````````````````````````````
-````````````````````````````````3ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅ3````````````````````````````````
-```````````````````````````````````*ÞÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÞ*```````````````````````````````````
-```````````````````````````````````````ÇÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÅÞ```````````````````````````````````````
-``````````````````````````````````````````6ÅÅÅÅÅÅÅÅÅÅÅÅÅÅÇ``````````````````````````````````````````
-`````````````````````````````````````````````3gÅÅÅÅÅÅg3`````````````````````````````````````````````
-````````````````````````````````````````````````‹ll‹````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````
-````````````````````````````````````````````````````````````````````````````````````````````````````
-*/
 
 // Client states
 #[repr(C)]
@@ -211,18 +237,53 @@ struct Client {
     pub capacity: u64,
 }
 
+/// A handle to a connected client with a completed request.
+///
+/// `ClientHandler` provides access to a client that has received its complete request and is ready
+/// for processing. The handler ensures exclusive access to the client, preventing concurrent
+/// modification of the client's state.
+///
+/// # Lifecycle
+///
+/// When obtained from `Networker::get_client()`, the client transitions to a "Processing" state.
+/// The client remains in this state until:
+///
+/// - `apply_response()` is called to send data back to the client
+/// - The `ClientHandler` is dropped, which marks the client for cleanup
+///
+/// # Drop Behavior
+///
+/// When dropped without calling `apply_response()`, the client connection is terminated. This
+/// prevents client-leak.
+///
+/// # Memory Management
+///
+/// The handler references the client's request buffer, which is managed by the C code. The request
+/// data remains valid for the lifetime of the `ClientHandler` and becomes invalid after drop.
+///
+/// # Thread Safety
+///
+/// `ClientHandler` implements `Send` and `Sync`, allowing it to be passed between threads
+/// or moved into async tasks. The internal mutex provides thread-safe access to the client's state.
 pub struct ClientHandler {
     inner: *mut Client,
     owner: *mut RawNetworker,
     mutex: *mut Mutex<()>,
 }
 impl Drop for ClientHandler {
+    #[cfg(not(feature = "tokio-runtime"))]
     fn drop(&mut self) {
         let _a = unsafe { *self.mutex.read().lock().unwrap() };
         unsafe { kill_client(self.owner, (*self.inner).id) };
     }
+    #[cfg(feature = "tokio-runtime")]
+    fn drop(&mut self) {
+        let _a = unsafe { *self.mutex.read().blocking_lock() };
+        unsafe { kill_client(self.owner, (*self.inner).id) };
+    }
 }
 
+#[cfg(not(feature = "tokio-runtime"))]
 impl ClientHandler {
     pub fn get_request(&self) -> (CompressionAlgorithm, Vec<u8>) {
         let _lock = unsafe { (*self.mutex).lock().unwrap() };
@@ -235,9 +296,73 @@ impl ClientHandler {
                 (*self.inner).req_headers.size as usize,
             )
         };
+        unsafe { vec.set_len((*self.inner).req_headers.size as usize) };
         unsafe { ((*self.inner).req_headers.compr_alg.into(), vec) }
     }
+    pub fn apply_response(
+        self,
+        response: Vec<u8>,
+        compression_algorithm: CompressionAlgorithm,
+    ) -> Result<(), Error> {
+        let _lock = unsafe { (*self.mutex).lock().unwrap() };
+        let mut response = response;
+        let res = unsafe {
+            apply_client_response(
+                self.owner,
+                (*self.inner).id,
+                response.as_mut_ptr(),
+                response.len() as u64,
+                compression_algorithm.into(),
+            )
+        };
+
+        if res >= 0 {
+            return Ok(());
+        }
+        return Err(Error::from_raw_os_error(res));
+    }
 }
+#[cfg(feature = "tokio-runtime")]
+impl ClientHandler {
+    pub async fn get_request(&self) -> (CompressionAlgorithm, Vec<u8>) {
+        let _lock = unsafe { (*self.mutex).lock().await };
+        let mut vec: Vec<u8> =
+            unsafe { Vec::with_capacity((*self.inner).req_headers.size as usize) };
+        unsafe {
+            ptr::copy_nonoverlapping(
+                (*self.inner).request,
+                vec.as_mut_ptr(),
+                (*self.inner).req_headers.size as usize,
+            )
+        };
+        unsafe { vec.set_len((*self.inner).req_headers.size as usize) };
+        unsafe { ((*self.inner).req_headers.compr_alg.into(), vec) }
+    }
+    pub async fn apply_response(
+        self,
+        response: Vec<u8>,
+        compression_algorithm: CompressionAlgorithm,
+    ) -> Result<(), Error> {
+        let _lock = unsafe { (*self.mutex).lock().await };
+        let mut response = response;
+        let res = unsafe {
+            apply_client_response(
+                self.owner,
+                (*self.inner).id,
+                response.as_mut_ptr(),
+                response.len() as u64,
+                compression_algorithm.into(),
+            )
+        };
+        if res >= 0 {
+            return Ok(());
+        }
+        return Err(Error::from_raw_os_error(res));
+    }
+}
+
+unsafe impl Sync for ClientHandler {}
+unsafe impl Send for ClientHandler {}
 
 // Compression algorithms
 #[repr(u8)]
@@ -268,6 +393,12 @@ impl From<CompressionAlgorithm> for u8 {
         value as u8
     }
 }
+impl From<CompressionAlgorithm> for i32 {
+    fn from(value: CompressionAlgorithm) -> Self {
+        value as i32
+    }
+}
+
 // IO operations
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -309,7 +440,6 @@ pub struct SomeClient {
 // Extern functions
 unsafe extern "C" {
     fn start(self_: *mut RawNetworker, settings: NetworkerSettings) -> c_int;
-    fn proc(self_: *mut RawNetworker) -> c_int;
     fn apply_client_response(
         self_: *mut RawNetworker,
         client_id: u64,
