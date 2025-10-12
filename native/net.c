@@ -91,7 +91,7 @@ int start(Networker* self, struct NetworkerSettings settings){
     
     int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock < 0){
-        return -1;
+        return -errno;
     }
     
     struct  sockaddr_in sockad;
@@ -100,19 +100,19 @@ int start(Networker* self, struct NetworkerSettings settings){
     inet_pton(AF_INET, settings.host, &sockad.sin_addr);
     int _l = bind(sock, (struct sockaddr*)&sockad, sizeof(sockad));
     if (_l < 0){
-        return errno;
+        return -errno;
     }
 
     int _l1 = listen(sock, settings.max_queue);
     if (_l1 < 0){
-        return errno;
+        return -errno;
     }
     self->sock = sock;
     self->initiated = 1;
 
     self->clients = (Client*)calloc(self->client_num, sizeof(Client));
     if(!self->clients){
-        return ENOMEM;  
+        return -ENOMEM;  
     }
     for(usize i = 0; i < self->client_num; i++){
         self->clients[i].id = i;
@@ -122,7 +122,7 @@ int start(Networker* self, struct NetworkerSettings settings){
 
     self->author_log = malloc(self->client_num*sizeof(u64));
     if(!self->author_log){
-        return ENOMEM;
+        return -ENOMEM;
     }
 
     {
@@ -280,7 +280,7 @@ int proc(Networker* self){
 
 int apply_client_response(Networker* self, u64 client_id, unsigned char* buffer, u64 buffer_size, int compression_algorithm){
     if (!(client_id < self->client_num-1 && self->clients[client_id].state == Processing)){
-        return ENOPKG;
+        return -ENOPKG;
     }
     MessageHeaders headers;
     headers.size =  buffer_size;
@@ -288,7 +288,7 @@ int apply_client_response(Networker* self, u64 client_id, unsigned char* buffer,
     usize rbs = sizeof(MessageHeaders) + buffer_size;
     unsigned char* response_buffer = malloc(rbs);
     if(!response_buffer){
-        return ENOMEM;
+        return -ENOMEM;
     }
     memcpy(response_buffer, &headers, sizeof(MessageHeaders));
     memcpy(response_buffer+sizeof(MessageHeaders), buffer, buffer_size);
@@ -317,14 +317,14 @@ int claim_client(Networker* self, u64 client_id){
         self->clients[client_id].state = Processing;
         return 0;
     }
-    return ENOPKG;
+    return -ENOPKG;
 }
 int kill_client(Networker* self, u64 client_id){
     if(client_id < self->client_num){
         self->clients[client_id].state = Kill;
         return 0;
     }
-    return ENOPKG;
+    return -ENOPKG;
 }
 
 int cycle(Networker* self){
