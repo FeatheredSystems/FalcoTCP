@@ -14,11 +14,9 @@
 #include <unistd.h>       
 #include <fcntl.h>      
 #include <liburing.h>
+#include "numbers.h"
 
-#define u64 u_int64_t
-#define u8 u_int8_t
-#define usize size_t
-
+#define sfree(p) do { free(p); (p) = NULL; } while(0)
 
 enum State{
     NonExistent = 0,
@@ -38,6 +36,7 @@ typedef struct {
     u64 size;
     u8 compr_alg;
 } MessageHeaders;
+#define MESSAGE_HEADERS_SIZE 9
 typedef struct{
     int sock;
     unsigned char* request;
@@ -69,7 +68,7 @@ enum Operation{
 };
 
 struct NetworkerSettings{
-    char host[12];
+    char host[16];
     unsigned short port;
     unsigned short max_queue;
     unsigned short max_clients;
@@ -84,6 +83,23 @@ typedef struct {
     u64* author_log;
 } Networker;
 
+// Serialize into a buffer (little-endian)
+static inline void serialize_message_headers(const MessageHeaders *msg, uint8_t *buf) {
+    // store size in little-endian
+    for (int i = 0; i < 8; i++) {
+        buf[i] = (msg->size >> (i * 8)) & 0xFF;
+    }
+    buf[8] = msg->compr_alg;  // 1 byte
+}
+
+// Deserialize from a buffer (little-endian)
+static inline void deserialize_message_headers(const uint8_t *buf, MessageHeaders *msg) {
+    msg->size = 0;
+    for (int i = 0; i < 8; i++) {
+        msg->size |= ((uint64_t)buf[i]) << (i * 8);
+    }
+    msg->compr_alg = buf[8];
+}
 int start(Networker* self, struct NetworkerSettings settings){
     if (self->initiated > 0){
         return 0;
@@ -160,23 +176,27 @@ int proc(Networker* self){
         }        
         if(self->clients[i].state == Idle){
             struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-            if(now-self->clients[i].activity > 3600){
+            if(now-self->clients[i].activity > 1200){
                 sqe->user_data = OP_Close;
                 io_uring_prep_close(sqe, self->clients[i].sock);
                 self->clients[i].state = NonExistent;
-                free(self->clients[i].response);
-                free(self->clients[i].request);
+                sfree(self->clients[i].response);
+                sfree(self->clients[i].request);
+                continue;
             }
             sqe->user_data = OP_Read;
             self->clients[i].state = Finished_H;
-            io_uring_prep_read(sqe,self->clients[i].sock, (char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, sizeof(MessageHeaders), 0);
+            io_uring_prep_read(sqe,self->clients[i].sock, (char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, MESSAGE_HEADERS_SIZE, 0);
             REGISTER;
             continue;
         }
 
         if(self->clients[i].state == Finished_H){
-            if(self->clients[i].recv_offset == sizeof(MessageHeaders)){
+            if(self->clients[i].recv_offset == MESSAGE_HEADERS_SIZE){
                 self->clients[i].recv_offset = 0;
+                unsigned char buffer [MESSAGE_HEADERS_SIZE];
+                memcpy(buffer, &self->clients[i].req_headers, MESSAGE_HEADERS_SIZE);
+                deserialize_message_headers(buffer, &self->clients[i].req_headers);
                 self->clients[i].state = Reading;
             }else{
                 self->clients[i].state = Idle;
@@ -186,11 +206,13 @@ int proc(Networker* self){
 
         if(self->clients[i].state == Reading){
             if(self->clients[i].capacity < self->clients[i].req_headers.size || self->clients[i].request == NULL){
+                sfree(self->clients[i].request);
                 self->clients[i].request = malloc(self->clients[i].req_headers.size);
                 self->clients[i].capacity = self->clients[i].req_headers.size;
             }
             struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-            sqe->user_data = Finished_R;
+            sqe->user_data = OP_Read;
+            self->clients[i].state = Finished_R;
             io_uring_prep_read(sqe,self->clients[i].sock,self->clients[i].request + self->clients[i].recv_offset,self->clients[i].req_headers.size,0);
             REGISTER;
             continue;
@@ -229,8 +251,8 @@ int proc(Networker* self){
             self->clients[i].state = NonExistent;
             self->clients[i].recv_offset = 0;
             self->clients[i].writev_offset = 0;
-            free(self->clients[i].response);
-            free(self->clients[i].request);
+            sfree(self->clients[i].response);
+            sfree(self->clients[i].request);
         }
     }
     {
@@ -267,6 +289,7 @@ int proc(Networker* self){
         }
         if(what == OP_SocketAcc){
             self->clients[ptr].sock = res;
+            self->clients[ptr].state = Idle;
             continue;
         }
     }
@@ -290,8 +313,8 @@ int apply_client_response(Networker* self, u64 client_id, unsigned char* buffer,
     if(!response_buffer){
         return -ENOMEM;
     }
-    memcpy(response_buffer, &headers, sizeof(MessageHeaders));
-    memcpy(response_buffer+sizeof(MessageHeaders), buffer, buffer_size);
+    serialize_message_headers(&headers, response_buffer);
+    memcpy(response_buffer+MESSAGE_HEADERS_SIZE, buffer, buffer_size);
     self->clients[client_id].response = response_buffer;
     self->clients[client_id].response_size = rbs;
     self->clients[client_id].state = Ready;

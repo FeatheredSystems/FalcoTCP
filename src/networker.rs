@@ -73,12 +73,12 @@ impl Networker {
             return Err(Error::new(ErrorKind::InvalidInput, "Invalid IPv4 host"));
         }
         let mut raw_net = RawNetworker::default();
-        let mut raw_host: [i8; 12] = [0i8; 12];
+        let mut raw_host: [i8; 16] = [0i8; 16];
         let b = host.as_bytes();
-        if b.len() != 12 {
+        if b.len() != 16 {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                "Invalid host, should be 12 bytes.",
+                "Invalid host, should be 16 bytes.",
             ));
         } else {
             unsafe {
@@ -412,7 +412,7 @@ pub enum Operation {
 // Networker settings
 #[repr(C)]
 pub struct NetworkerSettings {
-    pub host: [c_char; 12],
+    pub host: [c_char; 16],
     pub port: c_ushort,
     pub max_queue: c_ushort,
     pub max_clients: c_ushort,
