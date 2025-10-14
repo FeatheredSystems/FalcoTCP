@@ -1,7 +1,7 @@
 use aes_gcm::Aes256Gcm;
 use aes_gcm::aead::rand_core::RngCore;
 use aes_gcm::aead::{Aead, OsRng};
-#[cfg(feature = "ZSTD")]
+#[cfg(all(feature = "ZSTD", not(feature = "LZMA")))]
 use std::ffi::c_void;
 use std::io::{Error, ErrorKind};
 
@@ -17,12 +17,12 @@ use zstd::zstd_safe::zstd_sys::{
 
 #[cfg(feature = "GZIP")]
 use crate::compression_levels::GZIP_LEVEL;
+#[cfg(feature = "LZMA")]
+use crate::compression_levels::LZMA_LEVEL;
 #[cfg(feature = "ZSTD")]
 use crate::compression_levels::ZSTD_LEVEL;
 
 use crate::{enums::CompressionAlgorithm, heuristics::get_compressor};
-#[cfg(feature = "LZMA")]
-use compression_levels::LZMA_LEVEL;
 
 pub struct Var {
     #[cfg(feature = "encryption")]

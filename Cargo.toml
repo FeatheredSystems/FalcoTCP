@@ -24,6 +24,7 @@ LZMA = ["xz2"]
 GZIP = ["flate2"]
 LZ4 = ["lz4_flex"]
 ZSTD = ["zstd"]
+dev-redundancies = []
 
 [dependencies]
 aes-gcm = {version="=0.10.3",optional=true}
