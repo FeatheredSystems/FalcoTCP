@@ -22,7 +22,7 @@ pub const fn get_compressor(size: usize) -> CompressionAlgorithm {
 
 #[cfg(all(
     feature = "heuristics",
-    not(all(feature = "heubias-performance", feature = "heubias-ratio"))
+    not(any(feature = "heubias-performance", feature = "heubias-ratio"))
 ))]
 #[inline]
 #[allow(unused_variables)]
