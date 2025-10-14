@@ -1,0 +1,146 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - name: "Default"
+            flags: "--features default"
+          
+          - name: "Complete Compression - Performance Bias"
+            flags: "--features complete-compression,heuristics,heubias-performance,encryption"
+          
+          - name: "Complete Compression - Balance Bias"
+            flags: "--features complete-compression,heuristics,heubias-balance,encryption"
+          
+          - name: "Complete Compression - Ratio Bias"
+            flags: "--features complete-compression,heuristics,heubias-ratio,encryption"
+          
+          - name: "LZMA Only"
+            flags: "--no-default-features --features LZMA,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
+          - name: "ZSTD Only"
+            flags: "--no-default-features --features ZSTD,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
+          - name: "GZIP Only"
+            flags: "--no-default-features --features GZIP,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
+          - name: "LZ4 Only"
+            flags: "--no-default-features --features LZ4,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
+          - name: "No Compression - Encryption Only"
+            flags: "--no-default-features --features encryption,falco-client,falco-server"
+          
+          - name: "Complete Compression - No Encryption"
+            flags: "--no-default-features --features complete-compression,heuristics,heubias-balance,falco-client,falco-server"
+          
+          - name: "Client Only"
+            flags: "--no-default-features --features falco-client,encryption,complete-compression,heuristics,heubias-balance"
+          
+          - name: "Server Only"
+            flags: "--no-default-features --features falco-server,encryption,complete-compression,heuristics,heubias-balance"
+          
+          - name: "Minimal - No Features"
+            flags: "--no-default-features"
+          
+          - name: "With Tokio Runtime"
+            flags: "--features default,tokio-runtime"
+          
+          - name: "LZMA + ZSTD"
+            flags: "--no-default-features --features LZMA,ZSTD,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
+          - name: "GZIP + LZ4"
+            flags: "--no-default-features --features GZIP,LZ4,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
+          - name: "Heuristics - Performance (No Compression)"
+            flags: "--no-default-features --features heuristics,heubias-performance,encryption,falco-client,falco-server"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ matrix.features.name }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run tests - ${{ matrix.features.name }}
+        run: cargo test ${{ matrix.features.flags }} --lib
+
+      - name: Run doc tests - ${{ matrix.features.name }}
+        run: cargo test ${{ matrix.features.flags }} --doc
+        continue-on-error: true
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Check all feature combinations compile
+        run: |
+          cargo check --all-features
+          cargo check --no-default-features
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy
+
+      - name: Run clippy
+        run: cargo clippy --all-features -- -D warnings
+
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check

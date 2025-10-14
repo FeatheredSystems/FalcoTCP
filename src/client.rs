@@ -1,11 +1,11 @@
 use crate::networker::{CompressionAlgorithm, MessageHeaders};
+#[cfg(not(feature = "tokio-runtime"))]
+use std::net::TcpStream;
 use std::{
     io::{Error, Read, Write},
     net::SocketAddr,
     time::Duration,
 };
-#[cfg(not(feature = "tokio-runtime"))]
-use std::{net::TcpStream, sync::Arc, sync::Mutex};
 
 pub struct Client {
     socket: TcpStream,

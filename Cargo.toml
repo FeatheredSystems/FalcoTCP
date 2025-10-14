@@ -8,11 +8,29 @@ documentation = "https://falcotcp-docs.pages.dev/"
 license = "Apache-2.0"
 
 [features]
-default = []
+default = ["falco-client","falco-server","encryption","heuristics","heubias-balance"]
+heubias-performance = []
+heubias-balance = []
+heubias-ratio = []
+heuristics = []
+complete-compression = ["LZMA","GZIP","LZ4","ZSTD"]
 tokio-runtime = ["tokio"]
+client = []
+server = ["cc","libc"]
+encryption = ["aes-gcm"]
+falco-client = ["client"]
+falco-server = ["server"]
+LZMA = ["xz2"]
+GZIP = ["flate2"]
+LZ4 = ["lz4_flex"]
+ZSTD = ["zstd"]
 
 [dependencies]
-aes-gcm = "0.10.3"
-cc = "1.2.41"
-libc = "0.2.177"
-tokio = {version="1.47.1",features=["full"], optional=true}
+aes-gcm = {version="=0.10.3",optional=true}
+cc = {version="=1.2.41",optional=true}
+libc = {version="=0.2.177",optional=true}
+tokio = {version="=1.47.1",features=["full"], optional=true}
+xz2 = {version="=0.1.7", optional=true}
+flate2 = {version="=1.1.4", optional=true}
+lz4_flex = {version="=0.11.5",optional=true}
+zstd = {version="=0.12", optional=true}
