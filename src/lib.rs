@@ -40,8 +40,5 @@ pub mod compression_levels {
     pub const ZSTD_LEVEL: usize = 6;
 }
 
-#[cfg(feature = "falco-server")]
-pub mod falco_server;
-
 #[cfg(feature = "falco-client")]
 pub mod falco_client;

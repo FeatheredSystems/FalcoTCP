@@ -8,7 +8,7 @@ documentation = "https://falcotcp-docs.pages.dev/"
 license = "Apache-2.0"
 
 [features]
-default = ["falco-client","falco-server","encryption","heuristics","heubias-balance"]
+default = ["falco-client","falco-server","encryption","heuristics","heubias-balance","tokio-runtime"]
 heubias-performance = []
 heubias-balance = []
 heubias-ratio = []
