@@ -32,11 +32,12 @@ use crate::enums::CompressionAlgorithm;
 #[cfg(feature = "heuristics")]
 use crate::heuristics::get_compressor;
 
+#[derive(Clone)]
 pub struct Var {
     #[cfg(feature = "encryption")]
-    cipher: Aes256Gcm,
+    pub cipher: Aes256Gcm,
     #[cfg(not(feature = "heuristics"))]
-    compression: CompressionAlgorithm,
+    pub compression: CompressionAlgorithm,
 }
 
 #[inline]
@@ -251,7 +252,6 @@ mod test_pipeline {
             println!("algorithm: {}", b.0);
             let a = pipeline_receive(b.0, b.1, &var).unwrap();
             println!("output: {:?}", a);
-
             println!("tag? {}", a.len() / 16 == 2);
             a
         };

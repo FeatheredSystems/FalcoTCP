@@ -6,9 +6,13 @@ description = "TCP server/client with AES-256-GCM encryption."
 repository = "https://github.com/FeatheredSystems/FalcoTCP"
 documentation = "https://falcotcp-docs.pages.dev/"
 license = "Apache-2.0"
+build="build.rs"
+
+[build-dependencies]
+cc = "1.2.41"
 
 [features]
-default = ["falco-client","heuristics","heubias-balance","complete-compression"]
+default = ["falco-server","heuristics","falco-client","encryption"]
 heubias-performance = []
 heubias-balance = []
 heubias-ratio = []
@@ -16,7 +20,7 @@ heuristics = []
 complete-compression = ["LZMA","GZIP","LZ4","ZSTD"]
 tokio-runtime = ["tokio"]
 client = []
-server = ["cc","libc"]
+server = []
 encryption = ["aes-gcm"]
 falco-client = ["client"]
 falco-server = ["server"]
@@ -24,12 +28,11 @@ LZMA = ["xz2"]
 GZIP = ["flate2"]
 LZ4 = ["lz4_flex"]
 ZSTD = ["zstd"]
+dynamic-uring-link = []
 dev-redundancies = []
 
 [dependencies]
 aes-gcm = {version="=0.10.3",optional=true}
-cc = {version="=1.2.41",optional=true}
-libc = {version="=0.2.177",optional=true}
 tokio = {version="=1.47.1",features=["full"], optional=true}
 xz2 = {version="=0.1.7", optional=true}
 flate2 = {version="=1.1.4", optional=true}

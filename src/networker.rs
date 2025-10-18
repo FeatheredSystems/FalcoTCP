@@ -396,6 +396,7 @@ pub struct SomeClient {
 }
 
 // Extern functions
+#[link(name = "networker")]
 unsafe extern "C" {
     fn start(self_: *mut RawNetworker, settings: NetworkerSettings) -> c_int;
     fn apply_client_response(
@@ -409,4 +410,105 @@ unsafe extern "C" {
     fn claim_client(self_: *mut RawNetworker, client_id: u64) -> c_int;
     fn kill_client(self_: *mut RawNetworker, client_id: u64) -> c_int;
     fn cycle(self_: *mut RawNetworker) -> c_int;
+}
+
+// test routine
+
+#[cfg(test)]
+mod networker_test {
+    #[cfg(not(feature = "tokio-runtime"))]
+    use std::thread;
+    use std::{
+        net::{IpAddr, SocketAddr},
+        str::FromStr,
+        thread::spawn,
+        time::Duration,
+    };
+
+    #[cfg(feature = "encryption")]
+    use aes_gcm::{Aes256Gcm, KeyInit};
+
+    #[cfg(not(feature = "heuristics"))]
+    use crate::CompressionAlgorithm;
+    use crate::{
+        falco_pipeline::{Var, pipeline_receive, pipeline_send},
+        networker::Networker,
+    };
+    #[test]
+    #[cfg(not(feature = "tokio-runtime"))]
+    fn run() {
+        use std::sync::{Arc, Mutex};
+        use std::thread::JoinHandle;
+        let var = Var {
+            #[cfg(feature = "encryption")]
+            cipher: Aes256Gcm::new_from_slice(&[2u8; 32]).unwrap(),
+            #[cfg(not(feature = "heuristics"))]
+            compression: CompressionAlgorithm::None,
+        };
+        const WORKERS: usize = 2;
+        const CLIENTS: usize = 2;
+        let mut js: [Option<JoinHandle<_>>; WORKERS + 1] = [const { None }; (WORKERS + 1)];
+        let networker = Arc::new(Mutex::new(
+            Networker::new("127.0.0.1", 8000, 128, WORKERS as u16).unwrap(),
+        ));
+        for i in js.iter_mut().take(WORKERS) {
+            use std::thread;
+            let v = var.clone();
+            let networker = networker.clone();
+            *i = Some(thread::spawn(move || {
+                let var = v;
+                loop {
+                    if let Some(client) = networker.lock().unwrap().get_client() {
+                        let request = client.get_request();
+                        let bin = pipeline_receive(request.0.into(), request.1, &var).unwrap();
+                        let response =
+                            pipeline_send(bin.iter().map(|f| !f).collect(), &var).unwrap();
+                        client
+                            .apply_response(response.1, response.0.into())
+                            .unwrap();
+                    }
+                    thread::yield_now();
+                }
+            }));
+        }
+        let mutexy = Arc::new(Mutex::new(CLIENTS));
+        let cycle_instance = networker.clone();
+        let i_mutexy = mutexy.clone();
+        js[WORKERS - 1] = Some(spawn(move || {
+            let mutexy = i_mutexy;
+            while *mutexy.lock().unwrap() > 0 {
+                cycle_instance.lock().unwrap().cycle();
+                thread::yield_now();
+            }
+        }));
+
+        for _ in 0..CLIENTS {
+            let var = var.clone();
+            let mutexy = mutexy.clone();
+            spawn(move || {
+                use std::ops::SubAssign;
+
+                use crate::falco_client::FalcoClient;
+                let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1").unwrap(), 8000);
+                let client = FalcoClient::new(
+                    1,
+                    var,
+                    &socket,
+                    (
+                        Duration::from_secs(1),
+                        Duration::from_secs(1),
+                        Duration::from_secs(1),
+                    ),
+                    true,
+                )
+                .unwrap();
+                client
+                    .request(vec![1u8; 100])
+                    .unwrap()
+                    .iter()
+                    .for_each(|n| assert_eq!(*n, 254));
+                mutexy.lock().unwrap().sub_assign(1);
+            });
+        }
+    }
 }

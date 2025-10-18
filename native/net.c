@@ -13,8 +13,8 @@
 #include <time.h>
 #include <unistd.h>       
 #include <fcntl.h>      
-#include <liburing.h>
 #include "numbers.h"
+#include <liburing.h>
 
 #define sfree(p) do { free(p); (p) = NULL; } while(0)
 
@@ -166,7 +166,7 @@ int proc(Networker* self){
 
     u64 now = time(NULL);
     
-    for(int i = 0; i < self->client_num; i++){
+    for(u64 i = 0; i < self->client_num; i++){
         if(self->clients[i].state == NonExistent){
             struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
             io_uring_prep_accept(sqe, self->sock, NULL,NULL, 0);

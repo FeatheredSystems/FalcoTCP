@@ -152,7 +152,6 @@ dependencies = [
  "aes-gcm",
  "cc",
  "flate2",
- "libc",
  "lz4_flex",
  "tokio",
  "xz2",
