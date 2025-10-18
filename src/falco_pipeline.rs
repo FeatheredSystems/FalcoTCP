@@ -1,18 +1,20 @@
-use aes_gcm::Aes256Gcm;
-use aes_gcm::aead::rand_core::RngCore;
-use aes_gcm::aead::{Aead, OsRng};
+
+#[cfg(feature="encryption")]
+use aes_gcm::{aead::{rand_core::RngCore,Aead, OsRng},Aes256Gcm};
 #[cfg(all(feature = "ZSTD", not(feature = "LZMA")))]
 use std::ffi::c_void;
 use std::io::{Error, ErrorKind};
 
 #[cfg(feature = "GZIP")]
+use flate2::write::GzEncoder;
+#[cfg(feature="GZIP")]
 use std::io::Read;
 #[cfg(feature = "LZMA")]
 use std::{ffi::c_void, ops::Deref};
 #[cfg(feature = "ZSTD")]
 use zstd::zstd_safe::zstd_sys::{
     ZSTD_CONTENTSIZE_ERROR, ZSTD_CONTENTSIZE_UNKNOWN, ZSTD_compress, ZSTD_decompress,
-    ZSTD_getDecompressedSize, ZSTD_isError,
+    ZSTD_getDecompressedSize, ZSTD_isError, ZSTD_compressBound,
 };
 
 #[cfg(feature = "GZIP")]
@@ -29,9 +31,8 @@ pub struct Var {
     cipher: Aes256Gcm,
 }
 #[inline]
-pub fn pipeline_send(input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Error> {
-    #[cfg(feature = "ZSTD")]
-    let mut input = input;
+#[allow(unused_mut)]
+pub fn pipeline_send(mut input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Error> {
 
     #[cfg(feature = "LZ4")]
     let size = input.len() as u64;
@@ -45,15 +46,16 @@ pub fn pipeline_send(input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Error> 
             .to_vec(),
         #[cfg(feature = "ZSTD")]
         CompressionAlgorithm::Zstd => {
-            let mut output = Vec::with_capacity(input.len());
+            let max_size = unsafe { ZSTD_compressBound(input.len()) };
+            let mut output = Vec::with_capacity(max_size);
             let err = unsafe {
                 ZSTD_compress(
                     output.as_mut_ptr() as *mut c_void,
                     output.capacity(),
-                    input.as_mut_ptr() as *mut c_void,
+                    input.as_ptr() as *const c_void,  
                     input.len(),
                     ZSTD_LEVEL as i32,
-                )
+                )   
             };
             if unsafe { ZSTD_isError(err) } != 0 {
                 return Err(Error::new(
@@ -64,25 +66,13 @@ pub fn pipeline_send(input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Error> 
             unsafe { output.set_len(err as usize) };
             output
         }
-        #[cfg(feature = "GZIP")]
+         #[cfg(feature = "GZIP")]
         CompressionAlgorithm::Gzip => {
-            let mut output = Vec::with_capacity(input.len());
-            match flate2::Compress::new(flate2::Compression::new(GZIP_LEVEL as u32), false)
-                .compress(&input, &mut output, flate2::FlushCompress::Full)
-            {
-                Ok(a) => match a {
-                    flate2::Status::Ok => (),
-                    _ => {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            "Failed to compress using GZIP",
-                        ));
-                    }
-                },
-                Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
-            };
-
-            output
+            use std::io::Write;
+            
+            let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::new(GZIP_LEVEL as u32));
+            encoder.write_all(&input)?;
+            encoder.finish()?
         }
         #[cfg(feature = "LZ4")]
         CompressionAlgorithm::Lz4 => lz4_flex::compress(&input),
@@ -93,10 +83,14 @@ pub fn pipeline_send(input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Error> 
 
     #[cfg(feature = "LZ4")]
     let mut stuff = {
-        let mut buffer = Vec::with_capacity(8 + compressed.len());
-        buffer.extend_from_slice(&size.to_be_bytes());
-        buffer.extend_from_slice(&compressed);
-        buffer
+        if matches!(compression,CompressionAlgorithm::Lz4){
+            let mut buffer = Vec::with_capacity(8 + compressed.len());
+            buffer.extend_from_slice(&size.to_be_bytes());
+            buffer.extend_from_slice(&compressed);
+            buffer
+        }else{
+            compressed
+        }
     };
 
     #[cfg(not(feature = "LZ4"))]
@@ -124,14 +118,11 @@ pub fn pipeline_send(input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Error> 
 
     Ok((compression.u8(), stuff))
 }
+
 #[inline]
 pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, var: &Var) -> Result<Vec<u8>, Error> {
-    #[cfg(feature = "LZ4")]
-    let _size = u64::from_be_bytes({
-        let mut a = [0u8; 8];
-        a.copy_from_slice(&input[..8]);
-        a
-    });
+    let compression: CompressionAlgorithm = compr_alg.into();
+    
     #[cfg(feature = "encryption")]
     {
         if input.len() < 28 {
@@ -144,9 +135,20 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, var: &Var) -> Result<
             Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
         }
     }
+    
     #[cfg(feature = "LZ4")]
-    let input = input[8..].to_vec();
-    let compression: CompressionAlgorithm = compr_alg.into();
+    let _size = if matches!(compression, CompressionAlgorithm::Lz4) {
+        let size = u64::from_be_bytes({
+            let mut a = [0u8; 8];
+            a.copy_from_slice(&input[..8]);
+            a
+        });
+        input = input[8..].to_vec();
+        size
+    } else {
+        0u64
+    };
+
     let decompressed: Vec<u8> = match compression {
         #[cfg(feature = "LZMA")]
         CompressionAlgorithm::Lzma => {
@@ -185,11 +187,13 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, var: &Var) -> Result<
         }
         #[cfg(feature = "GZIP")]
         CompressionAlgorithm::Gzip => {
-            let mut decoder = flate2::read::DeflateDecoder::new(&input[..]);
+            use flate2::read::GzDecoder;
+            
+            let mut decoder = GzDecoder::new(&input[..]);
             let mut output = Vec::new();
             decoder.read_to_end(&mut output)?;
             output
-        }
+        } 
         #[cfg(feature = "LZ4")]
         CompressionAlgorithm::Lz4 => match lz4_flex::decompress(&input, _size as usize) {
             Ok(a) => a,
@@ -199,10 +203,14 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, var: &Var) -> Result<
     };
     Ok(decompressed)
 }
+
+
 #[cfg(test)]
 mod test_pipeline {
+    #[cfg(feature="encryption")]
     use aes_gcm::KeyInit;
-
+    #[cfg(not(feature="encryption"))]
+    use std::time::Instant;
     use super::*;
     #[test]
     fn run() {
@@ -216,8 +224,20 @@ mod test_pipeline {
             },
         };
         let mut bts = vec![0u8; 1024];
-        let mut o = OsRng;
-        o.fill_bytes(&mut bts);
+        #[cfg(feature="encryption")]
+        {
+            let mut o = OsRng;
+            o.fill_bytes(&mut bts);
+        }
+        #[cfg(not(feature="encryption"))]
+        {   
+            bts.clear();
+            let instance = Instant::now(); 
+            for _ in 0..(1024/16){
+                bts.extend_from_slice(&instance.elapsed().as_nanos().to_ne_bytes());
+                std::thread::yield_now();
+            }
+        }
         let result = {
             let b = pipeline_send(bts.clone(), &var).unwrap();
             pipeline_receive(b.0, b.1, &var).unwrap()

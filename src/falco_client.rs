@@ -10,8 +10,7 @@ use std::sync::{Arc, Mutex, RwLock};
 #[cfg(feature = "tokio-runtime")]
 use std::sync::Arc;
 #[cfg(feature = "tokio-runtime")]
-use tokio::sync::{Mutex, RwLock};
-use tokio::time::timeout;
+use tokio::{sync::{Mutex, RwLock},time::timeout};
 
 pub struct FalcoClient {
     pub var: Var,
@@ -54,7 +53,7 @@ impl FalcoClient {
                 drop(pool);
                 return self.mitigate(input, key);
             }
-            (key, val.unwrap())
+            (key, val.unwrap().clone())
         };
         let mut con = connection.lock().unwrap();
         if !self.retry {

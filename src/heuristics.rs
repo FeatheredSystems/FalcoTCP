@@ -2,7 +2,7 @@ use crate::enums::CompressionAlgorithm;
 
 #[inline]
 #[allow(unreachable_code)]
-pub const fn get_compressor(size: usize) -> CompressionAlgorithm{
+pub const fn get_compressor(_size: usize) -> CompressionAlgorithm{
     // heubias-performance
     #[cfg(all(feature="heubias-performance",not(feature="heubias-ratio")))]
     {
@@ -23,6 +23,7 @@ pub const fn get_compressor(size: usize) -> CompressionAlgorithm{
     }
     #[cfg(all(feature="heubias-ratio",not(feature="heubias-performance")))]
     {
+        let size = _size;
         #[cfg(any(feature = "LZMA", feature = "GZIP", feature = "ZSTD", feature = "LZ4"))]
         if size < 10485760  {
             #[cfg(feature = "LZMA")]
@@ -76,11 +77,12 @@ pub const fn get_compressor(size: usize) -> CompressionAlgorithm{
                 return CompressionAlgorithm::Lz4;
             }
         }
-        CompressionAlgorithm::None
+        return CompressionAlgorithm::None;
 
     }
     #[cfg(any(all(feature="heubias-ratio",feature="heubias-performance"),not(any(all(feature="heubias-ratio",feature="heubias-performance")))))]
     {
+        let size = _size;
         #[cfg(any(feature = "LZMA", feature = "ZSTD", feature = "GZIP", feature = "LZ4"))]
         if size < 10485760 {
             #[cfg(feature = "LZMA")]
@@ -127,7 +129,7 @@ pub const fn get_compressor(size: usize) -> CompressionAlgorithm{
             }
         }
 
-        CompressionAlgorithm::None
+        return CompressionAlgorithm::None;
 
     }
 }

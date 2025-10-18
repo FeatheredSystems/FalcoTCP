@@ -1,4 +1,4 @@
-use crate::networker::{CompressionAlgorithm, MessageHeaders};
+use crate::{CompressionAlgorithm, MessageHeaders};
 use std::{io::Error, net::SocketAddr, time::Duration};
 #[cfg(not(feature = "tokio-runtime"))]
 use std::{

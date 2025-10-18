@@ -2,6 +2,7 @@ use std::io::{Error, ErrorKind};
 use std::net::Ipv4Addr;
 use std::os::raw::{c_char, c_int, c_uchar, c_ushort};
 use std::ptr;
+use crate::{MessageHeaders,CompressionAlgorithm};
 
 #[cfg(not(feature = "tokio-runtime"))]
 use std::sync::Mutex;
@@ -213,13 +214,6 @@ pub enum State {
     Kill = 10,
 }
 
-// Message headers
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct MessageHeaders {
-    pub size: u64,
-    pub compr_alg: u8,
-}
 
 // Client
 #[repr(C)]
@@ -364,40 +358,6 @@ impl ClientHandler {
 unsafe impl Sync for ClientHandler {}
 unsafe impl Send for ClientHandler {}
 
-// Compression algorithms
-#[repr(u8)]
-#[derive(Debug, Copy, Clone)]
-pub enum CompressionAlgorithm {
-    None = 0,
-    LZMA = 1,
-    GZIP = 2,
-    LZ4 = 3,
-    ZSTD = 4,
-}
-
-impl From<u8> for CompressionAlgorithm {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => CompressionAlgorithm::None,
-            1 => CompressionAlgorithm::LZMA,
-            2 => CompressionAlgorithm::GZIP,
-            3 => CompressionAlgorithm::LZ4,
-            4 => CompressionAlgorithm::ZSTD,
-            _ => CompressionAlgorithm::None, // fallback
-        }
-    }
-}
-
-impl From<CompressionAlgorithm> for u8 {
-    fn from(value: CompressionAlgorithm) -> Self {
-        value as u8
-    }
-}
-impl From<CompressionAlgorithm> for i32 {
-    fn from(value: CompressionAlgorithm) -> Self {
-        value as i32
-    }
-}
 
 // IO operations
 #[repr(C)]
