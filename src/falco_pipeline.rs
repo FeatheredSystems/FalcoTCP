@@ -10,7 +10,7 @@ use flate2::write::GzEncoder;
 #[cfg(feature="GZIP")]
 use std::io::Read;
 #[cfg(feature = "LZMA")]
-use std::{ffi::c_void, ops::Deref};
+use std::{ffi::c_void,io::Write};
 #[cfg(feature = "ZSTD")]
 use zstd::zstd_safe::zstd_sys::{
     ZSTD_CONTENTSIZE_ERROR, ZSTD_CONTENTSIZE_UNKNOWN, ZSTD_compress, ZSTD_decompress,
@@ -32,18 +32,18 @@ pub struct Var {
 }
 #[inline]
 #[allow(unused_mut)]
-pub fn pipeline_send(mut input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Error> {
+pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Error> {
 
     #[cfg(feature = "LZ4")]
     let size = input.len() as u64;
     let compression: CompressionAlgorithm = get_compressor(input.len());
     let mut compressed: Vec<u8> = match compression {
         #[cfg(feature = "LZMA")]
-        CompressionAlgorithm::Lzma => xz2::write::XzEncoder::new(&mut input, LZMA_LEVEL as u32)
-            .finish()?
-            .deref()
-            .deref()
-            .to_vec(),
+        CompressionAlgorithm::Lzma => {
+            let mut encoder = xz2::write::XzEncoder::new(Vec::new(), LZMA_LEVEL as u32);
+            encoder.write_all(&input)?;
+            encoder.finish()?
+        } 
         #[cfg(feature = "ZSTD")]
         CompressionAlgorithm::Zstd => {
             let max_size = unsafe { ZSTD_compressBound(input.len()) };
@@ -103,7 +103,7 @@ pub fn pipeline_send(mut input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Err
             let mut rng = OsRng;
             rng.fill_bytes(&mut non);
         }
-        match var.cipher.encrypt(&non.into(), stuff.as_slice()) {
+        match _var.cipher.encrypt(&non.into(), stuff.as_slice()) {
             Ok(a) => {
                 stuff = {
                     let mut buffer = Vec::with_capacity(12 + a.len());
@@ -120,7 +120,7 @@ pub fn pipeline_send(mut input: Vec<u8>, var: &Var) -> Result<(u8, Vec<u8>), Err
 }
 
 #[inline]
-pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, var: &Var) -> Result<Vec<u8>, Error> {
+pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result<Vec<u8>, Error> {
     let compression: CompressionAlgorithm = compr_alg.into();
     
     #[cfg(feature = "encryption")]
@@ -130,7 +130,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, var: &Var) -> Result<
         }
         let nonce_slice = &input[0..12];
         let payload = &input[12..];
-        match var.cipher.decrypt(nonce_slice.into(), payload.as_ref()) {
+        match _var.cipher.decrypt(nonce_slice.into(), payload.as_ref()) {
             Ok(dec) => input = dec,
             Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
         }
@@ -152,8 +152,10 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, var: &Var) -> Result<
     let decompressed: Vec<u8> = match compression {
         #[cfg(feature = "LZMA")]
         CompressionAlgorithm::Lzma => {
-            let decoder = xz2::read::XzDecoder::new(&input[..]);
-            decoder.into_inner().to_vec()
+            let mut decoder = xz2::read::XzDecoder::new(&input[..]);
+            let mut output = Vec::new();
+            decoder.read_to_end(&mut output)?;
+            output 
         }
         #[cfg(feature = "ZSTD")]
         CompressionAlgorithm::Zstd => {
@@ -223,7 +225,7 @@ mod test_pipeline {
                 Aes256Gcm::new(&secret.into())
             },
         };
-        let mut bts = vec![0u8; 1024];
+        let mut bts = vec![0u8; 16];
         #[cfg(feature="encryption")]
         {
             let mut o = OsRng;
@@ -233,14 +235,21 @@ mod test_pipeline {
         {   
             bts.clear();
             let instance = Instant::now(); 
-            for _ in 0..(1024/16){
+            
                 bts.extend_from_slice(&instance.elapsed().as_nanos().to_ne_bytes());
                 std::thread::yield_now();
-            }
+            
         }
         let result = {
+            println!("input: {:?}",bts);
             let b = pipeline_send(bts.clone(), &var).unwrap();
-            pipeline_receive(b.0, b.1, &var).unwrap()
+            println!("algorithm: {}",b.0);
+            let a = pipeline_receive(b.0, b.1, &var).unwrap();
+            println!("output: {:?}",a);
+            
+            println!("tag? {}",a.len()/16 == 2);
+            a
+        
         };
         assert!(bts == result);
     }
