@@ -1,16 +1,16 @@
 
 #[cfg(feature="encryption")]
 use aes_gcm::{aead::{rand_core::RngCore,Aead, OsRng},Aes256Gcm};
-#[cfg(all(feature = "ZSTD", not(feature = "LZMA")))]
+#[cfg(feature = "ZSTD")]
 use std::ffi::c_void;
 use std::io::{Error, ErrorKind};
 
 #[cfg(feature = "GZIP")]
 use flate2::write::GzEncoder;
-#[cfg(feature="GZIP")]
+#[cfg(any(feature="GZIP",feature="LZMA"))]
 use std::io::Read;
 #[cfg(feature = "LZMA")]
-use std::{ffi::c_void,io::Write};
+use std::io::Write;
 #[cfg(feature = "ZSTD")]
 use zstd::zstd_safe::zstd_sys::{
     ZSTD_CONTENTSIZE_ERROR, ZSTD_CONTENTSIZE_UNKNOWN, ZSTD_compress, ZSTD_decompress,
@@ -24,20 +24,31 @@ use crate::compression_levels::LZMA_LEVEL;
 #[cfg(feature = "ZSTD")]
 use crate::compression_levels::ZSTD_LEVEL;
 
-use crate::{enums::CompressionAlgorithm, heuristics::get_compressor};
+use crate::enums::CompressionAlgorithm;
+
+#[cfg(feature="heuristics")]
+use crate::heuristics::get_compressor;
 
 pub struct Var {
     #[cfg(feature = "encryption")]
     cipher: Aes256Gcm,
+    #[cfg(not(feature="heuristics"))]
+    compression: CompressionAlgorithm
 }
+
 #[inline]
 #[allow(unused_mut)]
 pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Error> {
 
     #[cfg(feature = "LZ4")]
     let size = input.len() as u64;
-    let compression: CompressionAlgorithm = get_compressor(input.len());
-    let mut compressed: Vec<u8> = match compression {
+    
+    #[cfg(feature="heuristics")]
+    let compression: &CompressionAlgorithm = &get_compressor(input.len());
+    #[cfg(not(feature="heuristics"))]
+    let compression = &_var.compression;
+
+    let mut compressed: Vec<u8> = match *compression {
         #[cfg(feature = "LZMA")]
         CompressionAlgorithm::Lzma => {
             let mut encoder = xz2::write::XzEncoder::new(Vec::new(), LZMA_LEVEL as u32);
@@ -224,6 +235,8 @@ mod test_pipeline {
                 o.fill_bytes(&mut secret);
                 Aes256Gcm::new(&secret.into())
             },
+            #[cfg(not(feature = "heuristics"))]
+            compression: CompressionAlgorithm::get() 
         };
         let mut bts = vec![0u8; 16];
         #[cfg(feature="encryption")]

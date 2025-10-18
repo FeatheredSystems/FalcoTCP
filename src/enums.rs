@@ -43,3 +43,27 @@ impl Into<CompressionAlgorithm> for u8 {
         }
     }
 }
+
+impl Clone for CompressionAlgorithm {
+    fn clone(&self) -> CompressionAlgorithm {
+        *self
+    }
+}
+impl Copy for CompressionAlgorithm { }
+
+impl CompressionAlgorithm{
+    /// Return one of the available compression algorithm
+    #[allow(unreachable_code)]
+    pub fn get() -> Self{
+        #[cfg(feature="LZMA")]
+        return CompressionAlgorithm::Lzma;
+        #[cfg(feature="ZSTD")]
+        return CompressionAlgorithm::Zstd;
+        #[cfg(feature="GZIP")]
+        return CompressionAlgorithm::Gzip;
+        #[cfg(feature="LZ4")]
+        return CompressionAlgorithm::Lz4;
+
+        return CompressionAlgorithm::None
+    }
+}
