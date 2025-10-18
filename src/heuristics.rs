@@ -81,7 +81,7 @@ pub const fn get_compressor(_size: usize) -> CompressionAlgorithm {
     }
     #[cfg(any(
         all(feature = "heubias-ratio", feature = "heubias-performance"),
-        not(any(all(feature = "heubias-ratio", feature = "heubias-performance")))
+        not(any(feature = "heubias-ratio", feature = "heubias-performance"))
     ))]
     {
         #[cfg(any(feature = "LZMA", feature = "ZSTD", feature = "GZIP", feature = "LZ4"))]
