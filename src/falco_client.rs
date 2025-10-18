@@ -106,7 +106,7 @@ impl FalcoClient {
         let mut v = Vec::with_capacity(clients);
         for _ in 0..clients {
             v.push(Arc::new(Mutex::new(
-                Client::new(timeout.2.clone(), socket).await?,
+                Client::new(timeout.2, socket).await?,
             )));
         }
         #[cfg(feature = "dev-redundancies")]
@@ -114,7 +114,7 @@ impl FalcoClient {
         Ok(FalcoClient {
             var: parameters,
             pool: Arc::new(RwLock::new(v)),
-            target: (socket.clone(), timeout),
+            target: (*socket, timeout),
             clock: Instant::now(),
             retry,
         })
@@ -143,7 +143,7 @@ impl FalcoClient {
                     Ok(a) => a,
                     Err(e) => match e.kind() {
                         std::io::ErrorKind::BrokenPipe => {
-                            if prevent_mitigate == false {
+                            if prevent_mitigate {
                                 return Box::pin(self.mitigate(input, key)).await;
                             } else {
                                 return Err(e);
@@ -159,7 +159,7 @@ impl FalcoClient {
     async fn mitigate(&self, input: Vec<u8>, key: usize) -> Result<Vec<u8>, Error> {
         self.pool.write().await.swap_remove(key);
         self.generate(1).await?;
-        Ok(self.request(input, true).await?)
+        self.request(input, true).await
     }
     pub async fn generate(&self, count: usize) -> Result<(), Error> {
         let mut pool = self.pool.write().await;
@@ -171,7 +171,7 @@ impl FalcoClient {
             pool.push(Arc::new(Mutex::new(
                 timeout(
                     self.target.1.2,
-                    Client::new(self.target.1.2.clone(), &self.target.0.clone()),
+                    Client::new(self.target.1.2, &self.target.0.clone()),
                 )
                 .await??,
             )));

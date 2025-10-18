@@ -27,9 +27,9 @@ impl CompressionAlgorithm {
         }
     }
 }
-impl Into<CompressionAlgorithm> for u8 {
-    fn into(self) -> CompressionAlgorithm {
-        match self {
+impl From<u8> for CompressionAlgorithm{
+    fn from(s : u8) -> CompressionAlgorithm {
+        match s {
             #[cfg(feature = "LZMA")]
             1 => CompressionAlgorithm::Lzma,
             #[cfg(feature = "ZSTD")]
@@ -64,6 +64,6 @@ impl CompressionAlgorithm{
         #[cfg(feature="LZ4")]
         return CompressionAlgorithm::Lz4;
 
-        return CompressionAlgorithm::None
+        CompressionAlgorithm::None
     }
 }

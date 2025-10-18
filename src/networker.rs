@@ -106,7 +106,7 @@ impl Networker {
                 initilized: 1,
             });
         }
-        return Err(Error::from_raw_os_error(result));
+        Err(Error::from_raw_os_error(result))
     }
 
     /// The networker runs in cycles, moving to the next one require this function being called
@@ -267,12 +267,12 @@ pub struct ClientHandler {
 impl Drop for ClientHandler {
     #[cfg(not(feature = "tokio-runtime"))]
     fn drop(&mut self) {
-        let _a = unsafe { *self.mutex.read().lock().unwrap() };
+        unsafe { *self.mutex.read().lock().unwrap() };
         unsafe { kill_client(self.owner, (*self.inner).id) };
     }
     #[cfg(feature = "tokio-runtime")]
     fn drop(&mut self) {
-        let _a = unsafe { *self.mutex.read().blocking_lock() };
+        unsafe { *self.mutex.read().blocking_lock() };
         unsafe { kill_client(self.owner, (*self.inner).id) };
     }
 }
@@ -351,7 +351,7 @@ impl ClientHandler {
         if res >= 0 {
             return Ok(());
         }
-        return Err(Error::from_raw_os_error(res));
+        Err(Error::from_raw_os_error(res))
     }
 }
 

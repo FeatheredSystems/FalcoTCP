@@ -69,8 +69,7 @@ pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Er
                 )   
             };
             if unsafe { ZSTD_isError(err) } != 0 {
-                return Err(Error::new(
-                    std::io::ErrorKind::Other,
+                return Err(Error::other(
                     "Failed to compress using ZSTD",
                 ));
             }
@@ -123,7 +122,7 @@ pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Er
                     buffer
                 };
             }
-            Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
+            Err(e) => return Err(Error::other(e.to_string())),
         }
     }
 
@@ -143,7 +142,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
         let payload = &input[12..];
         match _var.cipher.decrypt(nonce_slice.into(), payload.as_ref()) {
             Ok(dec) => input = dec,
-            Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
+            Err(e) => return Err(Error::other(e.to_string())),
         }
     }
     
@@ -175,8 +174,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
             if decomp_size as u64 == ZSTD_CONTENTSIZE_UNKNOWN as u64
                 || decomp_size as u64 == ZSTD_CONTENTSIZE_ERROR as u64
             {
-                return Err(Error::new(
-                    ErrorKind::Other,
+                return Err(Error::other(
                     "Failed to get ZSTD decompressed size",
                 ));
             }
@@ -190,10 +188,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
                 )
             };
             if unsafe { ZSTD_isError(err) } != 0 {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    "Failed to decompress using ZSTD",
-                ));
+                return Err(Error::other("Failed to decompress using ZSTD",));
             }
             unsafe { output.set_len(err as usize) };
             output
@@ -210,7 +205,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
         #[cfg(feature = "LZ4")]
         CompressionAlgorithm::Lz4 => match lz4_flex::decompress(&input, _size as usize) {
             Ok(a) => a,
-            Err(e) => return Err(Error::new(ErrorKind::Other, e.to_string())),
+            Err(e) => return Err(Error::other(e.to_string())),
         },
         _ => input,
     };

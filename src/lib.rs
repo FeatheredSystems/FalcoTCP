@@ -1,4 +1,4 @@
-#[cfg(any(feature = "server"))]
+#[cfg(feature = "server")]
 pub mod networker;
 
 #[cfg(any(feature="server",feature="client"))]

@@ -69,7 +69,7 @@ impl Client {
     /// - connection_timeout: Timeouts if the connection take too long to stablish.
     pub async fn new(connection_timeout: Duration, adr: &SocketAddr) -> Result<Self, Error> {
         let socket = timeout(connection_timeout, TcpStream::connect(adr)).await??;
-        return Ok(Client { socket });
+        Ok(Client { socket })
     }
     pub async fn request(
         &mut self,
@@ -82,7 +82,7 @@ impl Client {
         };
         let mut buffer = Vec::with_capacity(9 + input.len());
         buffer.extend(&headers.size.to_le_bytes());
-        buffer.push(headers.compr_alg as u8);
+        buffer.push(headers.compr_alg);
         buffer.extend_from_slice(&input);
         self.socket.write_all(&buffer).await?;
 

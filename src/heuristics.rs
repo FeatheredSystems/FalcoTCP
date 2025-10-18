@@ -77,7 +77,7 @@ pub const fn get_compressor(_size: usize) -> CompressionAlgorithm{
                 return CompressionAlgorithm::Lz4;
             }
         }
-        return CompressionAlgorithm::None;
+        CompressionAlgorithm::None
 
     }
     #[cfg(any(all(feature="heubias-ratio",feature="heubias-performance"),not(any(all(feature="heubias-ratio",feature="heubias-performance")))))]
@@ -130,7 +130,7 @@ pub const fn get_compressor(_size: usize) -> CompressionAlgorithm{
             }
         }
 
-        return CompressionAlgorithm::None;
+        CompressionAlgorithm::None
 
     }
 }
