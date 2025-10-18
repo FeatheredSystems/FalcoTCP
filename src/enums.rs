@@ -27,8 +27,8 @@ impl CompressionAlgorithm {
         }
     }
 }
-impl From<u8> for CompressionAlgorithm{
-    fn from(s : u8) -> CompressionAlgorithm {
+impl From<u8> for CompressionAlgorithm {
+    fn from(s: u8) -> CompressionAlgorithm {
         match s {
             #[cfg(feature = "LZMA")]
             1 => CompressionAlgorithm::Lzma,
@@ -49,19 +49,19 @@ impl Clone for CompressionAlgorithm {
         *self
     }
 }
-impl Copy for CompressionAlgorithm { }
+impl Copy for CompressionAlgorithm {}
 
-impl CompressionAlgorithm{
+impl CompressionAlgorithm {
     /// Return one of the available compression algorithm
     #[allow(unreachable_code)]
-    pub fn get() -> Self{
-        #[cfg(feature="LZMA")]
+    pub fn get() -> Self {
+        #[cfg(feature = "LZMA")]
         return CompressionAlgorithm::Lzma;
-        #[cfg(feature="ZSTD")]
+        #[cfg(feature = "ZSTD")]
         return CompressionAlgorithm::Zstd;
-        #[cfg(feature="GZIP")]
+        #[cfg(feature = "GZIP")]
         return CompressionAlgorithm::Gzip;
-        #[cfg(feature="LZ4")]
+        #[cfg(feature = "LZ4")]
         return CompressionAlgorithm::Lz4;
 
         CompressionAlgorithm::None

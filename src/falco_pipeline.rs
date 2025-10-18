@@ -1,20 +1,23 @@
-
-#[cfg(feature="encryption")]
-use aes_gcm::{aead::{rand_core::RngCore,Aead, OsRng},Aes256Gcm};
-#[cfg(feature = "ZSTD")]
-use std::ffi::c_void;
-use std::io::{Error, ErrorKind};
-
+#[cfg(feature = "encryption")]
+use aes_gcm::{
+    Aes256Gcm,
+    aead::{Aead, OsRng, rand_core::RngCore},
+};
 #[cfg(feature = "GZIP")]
 use flate2::write::GzEncoder;
-#[cfg(any(feature="GZIP",feature="LZMA"))]
+#[cfg(feature = "ZSTD")]
+use std::ffi::c_void;
+use std::io::Error;
+#[cfg(feature = "encryption")]
+use std::io::ErrorKind;
+#[cfg(any(feature = "GZIP", feature = "LZMA"))]
 use std::io::Read;
 #[cfg(feature = "LZMA")]
 use std::io::Write;
 #[cfg(feature = "ZSTD")]
 use zstd::zstd_safe::zstd_sys::{
-    ZSTD_CONTENTSIZE_ERROR, ZSTD_CONTENTSIZE_UNKNOWN, ZSTD_compress, ZSTD_decompress,
-    ZSTD_getDecompressedSize, ZSTD_isError, ZSTD_compressBound,
+    ZSTD_CONTENTSIZE_ERROR, ZSTD_CONTENTSIZE_UNKNOWN, ZSTD_compress, ZSTD_compressBound,
+    ZSTD_decompress, ZSTD_getDecompressedSize, ZSTD_isError,
 };
 
 #[cfg(feature = "GZIP")]
@@ -26,26 +29,25 @@ use crate::compression_levels::ZSTD_LEVEL;
 
 use crate::enums::CompressionAlgorithm;
 
-#[cfg(feature="heuristics")]
+#[cfg(feature = "heuristics")]
 use crate::heuristics::get_compressor;
 
 pub struct Var {
     #[cfg(feature = "encryption")]
     cipher: Aes256Gcm,
-    #[cfg(not(feature="heuristics"))]
-    compression: CompressionAlgorithm
+    #[cfg(not(feature = "heuristics"))]
+    compression: CompressionAlgorithm,
 }
 
 #[inline]
 #[allow(unused_mut)]
 pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Error> {
-
     #[cfg(feature = "LZ4")]
     let size = input.len() as u64;
-    
-    #[cfg(feature="heuristics")]
+
+    #[cfg(feature = "heuristics")]
     let compression: &CompressionAlgorithm = &get_compressor(input.len());
-    #[cfg(not(feature="heuristics"))]
+    #[cfg(not(feature = "heuristics"))]
     let compression = &_var.compression;
 
     let mut compressed: Vec<u8> = match *compression {
@@ -54,7 +56,7 @@ pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Er
             let mut encoder = xz2::write::XzEncoder::new(Vec::new(), LZMA_LEVEL as u32);
             encoder.write_all(&input)?;
             encoder.finish()?
-        } 
+        }
         #[cfg(feature = "ZSTD")]
         CompressionAlgorithm::Zstd => {
             let max_size = unsafe { ZSTD_compressBound(input.len()) };
@@ -63,24 +65,23 @@ pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Er
                 ZSTD_compress(
                     output.as_mut_ptr() as *mut c_void,
                     output.capacity(),
-                    input.as_ptr() as *const c_void,  
+                    input.as_ptr() as *const c_void,
                     input.len(),
                     ZSTD_LEVEL as i32,
-                )   
+                )
             };
             if unsafe { ZSTD_isError(err) } != 0 {
-                return Err(Error::other(
-                    "Failed to compress using ZSTD",
-                ));
+                return Err(Error::other("Failed to compress using ZSTD"));
             }
             unsafe { output.set_len(err as usize) };
             output
         }
-         #[cfg(feature = "GZIP")]
+        #[cfg(feature = "GZIP")]
         CompressionAlgorithm::Gzip => {
             use std::io::Write;
-            
-            let mut encoder = GzEncoder::new(Vec::new(), flate2::Compression::new(GZIP_LEVEL as u32));
+
+            let mut encoder =
+                GzEncoder::new(Vec::new(), flate2::Compression::new(GZIP_LEVEL as u32));
             encoder.write_all(&input)?;
             encoder.finish()?
         }
@@ -93,12 +94,12 @@ pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Er
 
     #[cfg(feature = "LZ4")]
     let mut stuff = {
-        if matches!(compression,CompressionAlgorithm::Lz4){
+        if matches!(compression, CompressionAlgorithm::Lz4) {
             let mut buffer = Vec::with_capacity(8 + compressed.len());
             buffer.extend_from_slice(&size.to_be_bytes());
             buffer.extend_from_slice(&compressed);
             buffer
-        }else{
+        } else {
             compressed
         }
     };
@@ -132,7 +133,7 @@ pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Er
 #[inline]
 pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result<Vec<u8>, Error> {
     let compression: CompressionAlgorithm = compr_alg.into();
-    
+
     #[cfg(feature = "encryption")]
     {
         if input.len() < 28 {
@@ -145,7 +146,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
             Err(e) => return Err(Error::other(e.to_string())),
         }
     }
-    
+
     #[cfg(feature = "LZ4")]
     let _size = if matches!(compression, CompressionAlgorithm::Lz4) {
         let size = u64::from_be_bytes({
@@ -165,7 +166,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
             let mut decoder = xz2::read::XzDecoder::new(&input[..]);
             let mut output = Vec::new();
             decoder.read_to_end(&mut output)?;
-            output 
+            output
         }
         #[cfg(feature = "ZSTD")]
         CompressionAlgorithm::Zstd => {
@@ -174,9 +175,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
             if decomp_size as u64 == ZSTD_CONTENTSIZE_UNKNOWN as u64
                 || decomp_size as u64 == ZSTD_CONTENTSIZE_ERROR as u64
             {
-                return Err(Error::other(
-                    "Failed to get ZSTD decompressed size",
-                ));
+                return Err(Error::other("Failed to get ZSTD decompressed size"));
             }
             let mut output = Vec::with_capacity(decomp_size as usize);
             let err = unsafe {
@@ -188,7 +187,7 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
                 )
             };
             if unsafe { ZSTD_isError(err) } != 0 {
-                return Err(Error::other("Failed to decompress using ZSTD",));
+                return Err(Error::other("Failed to decompress using ZSTD"));
             }
             unsafe { output.set_len(err as usize) };
             output
@@ -196,12 +195,12 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
         #[cfg(feature = "GZIP")]
         CompressionAlgorithm::Gzip => {
             use flate2::read::GzDecoder;
-            
+
             let mut decoder = GzDecoder::new(&input[..]);
             let mut output = Vec::new();
             decoder.read_to_end(&mut output)?;
             output
-        } 
+        }
         #[cfg(feature = "LZ4")]
         CompressionAlgorithm::Lz4 => match lz4_flex::decompress(&input, _size as usize) {
             Ok(a) => a,
@@ -212,14 +211,13 @@ pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result
     Ok(decompressed)
 }
 
-
 #[cfg(test)]
 mod test_pipeline {
-    #[cfg(feature="encryption")]
-    use aes_gcm::KeyInit;
-    #[cfg(not(feature="encryption"))]
-    use std::time::Instant;
     use super::*;
+    #[cfg(feature = "encryption")]
+    use aes_gcm::KeyInit;
+    #[cfg(not(feature = "encryption"))]
+    use std::time::Instant;
     #[test]
     fn run() {
         let var = Var {
@@ -231,33 +229,31 @@ mod test_pipeline {
                 Aes256Gcm::new(&secret.into())
             },
             #[cfg(not(feature = "heuristics"))]
-            compression: CompressionAlgorithm::get() 
+            compression: CompressionAlgorithm::get(),
         };
         let mut bts = vec![0u8; 16];
-        #[cfg(feature="encryption")]
+        #[cfg(feature = "encryption")]
         {
             let mut o = OsRng;
             o.fill_bytes(&mut bts);
         }
-        #[cfg(not(feature="encryption"))]
-        {   
+        #[cfg(not(feature = "encryption"))]
+        {
             bts.clear();
-            let instance = Instant::now(); 
-            
-                bts.extend_from_slice(&instance.elapsed().as_nanos().to_ne_bytes());
-                std::thread::yield_now();
-            
+            let instance = Instant::now();
+
+            bts.extend_from_slice(&instance.elapsed().as_nanos().to_ne_bytes());
+            std::thread::yield_now();
         }
         let result = {
-            println!("input: {:?}",bts);
+            println!("input: {:?}", bts);
             let b = pipeline_send(bts.clone(), &var).unwrap();
-            println!("algorithm: {}",b.0);
+            println!("algorithm: {}", b.0);
             let a = pipeline_receive(b.0, b.1, &var).unwrap();
-            println!("output: {:?}",a);
-            
-            println!("tag? {}",a.len()/16 == 2);
+            println!("output: {:?}", a);
+
+            println!("tag? {}", a.len() / 16 == 2);
             a
-        
         };
         assert!(bts == result);
     }

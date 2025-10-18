@@ -1,8 +1,8 @@
+use crate::{CompressionAlgorithm, MessageHeaders};
 use std::io::{Error, ErrorKind};
 use std::net::Ipv4Addr;
 use std::os::raw::{c_char, c_int, c_uchar, c_ushort};
 use std::ptr;
-use crate::{MessageHeaders,CompressionAlgorithm};
 
 #[cfg(not(feature = "tokio-runtime"))]
 use std::sync::Mutex;
@@ -214,7 +214,6 @@ pub enum State {
     Kill = 10,
 }
 
-
 // Client
 #[repr(C)]
 struct Client {
@@ -357,7 +356,6 @@ impl ClientHandler {
 
 unsafe impl Sync for ClientHandler {}
 unsafe impl Send for ClientHandler {}
-
 
 // IO operations
 #[repr(C)]

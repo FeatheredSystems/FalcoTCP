@@ -10,7 +10,10 @@ use std::sync::{Arc, Mutex, RwLock};
 #[cfg(feature = "tokio-runtime")]
 use std::sync::Arc;
 #[cfg(feature = "tokio-runtime")]
-use tokio::{sync::{Mutex, RwLock},time::timeout};
+use tokio::{
+    sync::{Mutex, RwLock},
+    time::timeout,
+};
 
 pub struct FalcoClient {
     pub var: Var,
@@ -105,9 +108,7 @@ impl FalcoClient {
     ) -> Result<Self, Error> {
         let mut v = Vec::with_capacity(clients);
         for _ in 0..clients {
-            v.push(Arc::new(Mutex::new(
-                Client::new(timeout.2, socket).await?,
-            )));
+            v.push(Arc::new(Mutex::new(Client::new(timeout.2, socket).await?)));
         }
         #[cfg(feature = "dev-redundancies")]
         v.shrink_to_fit(); // redundant

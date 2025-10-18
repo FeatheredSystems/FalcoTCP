@@ -1,7 +1,7 @@
 #[cfg(feature = "server")]
 pub mod networker;
 
-#[cfg(any(feature="server",feature="client"))]
+#[cfg(any(feature = "server", feature = "client"))]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct MessageHeaders {
@@ -9,8 +9,7 @@ pub struct MessageHeaders {
     pub compr_alg: u8,
 }
 
-
-#[cfg(any(feature="server",feature="client"))]
+#[cfg(any(feature = "server", feature = "client"))]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
 pub enum CompressionAlgorithm {
@@ -21,7 +20,7 @@ pub enum CompressionAlgorithm {
     ZSTD = 4,
 }
 
-#[cfg(any(feature="server",feature="client"))]
+#[cfg(any(feature = "server", feature = "client"))]
 impl From<u8> for CompressionAlgorithm {
     fn from(value: u8) -> Self {
         match value {
@@ -35,20 +34,19 @@ impl From<u8> for CompressionAlgorithm {
     }
 }
 
-#[cfg(any(feature="server",feature="client"))]
+#[cfg(any(feature = "server", feature = "client"))]
 impl From<CompressionAlgorithm> for u8 {
     fn from(value: CompressionAlgorithm) -> Self {
         value as u8
     }
 }
 
-#[cfg(any(feature="server",feature="client"))]
+#[cfg(any(feature = "server", feature = "client"))]
 impl From<CompressionAlgorithm> for i32 {
     fn from(value: CompressionAlgorithm) -> Self {
         value as i32
     }
 }
-
 
 #[cfg(feature = "client")]
 pub mod client;
@@ -65,8 +63,7 @@ pub mod enums;
 // Compression level constants per heuristic
 // ===========================================
 
-
-#[cfg(feature="heuristics")]
+#[cfg(feature = "heuristics")]
 pub mod compression_levels {
     pub const LZMA_LEVEL: usize = 4;
     pub const GZIP_LEVEL: usize = 5;
