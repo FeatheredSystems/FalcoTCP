@@ -415,6 +415,7 @@ unsafe extern "C" {
 // test routine
 
 #[cfg(test)]
+#[cfg(feature = "networker-testing")]
 mod networker_test {
     #[cfg(not(feature = "tokio-runtime"))]
     use std::thread;
