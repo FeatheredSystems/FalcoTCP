@@ -15,73 +15,16 @@
 #include <fcntl.h>      
 #include "numbers.h"
 #include <liburing.h>
+#include "net.h"
 
 #define sfree(p) do { free(p); (p) = NULL; } while(0)
 
-enum State{
-    NonExistent = 0,
-    Idle = 1,
-    HeadersReaden = 2,
-    Finished_H = 3,
-    Reading = 4,
-    Finished_R = 5,
-    Available = 6,
-    Processing = 7,
-    Ready = 8,
-    WrittingSock = 9,
-    Kill = 10,
-};
-
-typedef struct {
-    u64 size;
-    u8 compr_alg;
-} MessageHeaders;
 #define MESSAGE_HEADERS_SIZE 9
-typedef struct{
-    int sock;
-    unsigned char* request;
-    unsigned char* response;
-    MessageHeaders req_headers; 
-    u64 response_size;
-    usize recv_offset;
-    usize writev_offset;
-    u64 id; 
-    int state;
-    u64 activity;
-    u64 capacity;
-} Client;
 
 
-// Helps the rust interface to define whether it can or cannot decompress the given input
-enum CompressionAlgorithm{
-    None = 0,
-    LZMA = 1,
-    GZIP = 2,
-    LZ4 = 3,
-    ZSTD = 4,
-};
-enum Operation{
-    OP_SocketAcc = 0,
-    OP_Read = 1,
-    OP_Write = 2,
-    OP_Close = 3,
-};
 
-struct NetworkerSettings{
-    char host[16];
-    unsigned short port;
-    unsigned short max_queue;
-    unsigned short max_clients;
-};
 
-typedef struct {
-    int initiated;
-    int sock;
-    u64 client_num;
-    Client* clients;
-    struct io_uring* ring;
-    u64* author_log;
-} Networker;
+
 
 // Serialize into a buffer (little-endian)
 static inline void serialize_message_headers(const MessageHeaders *msg, uint8_t *buf) {
@@ -100,11 +43,12 @@ static inline void deserialize_message_headers(const uint8_t *buf, MessageHeader
     }
     msg->compr_alg = buf[8];
 }
-int start(Networker* self, struct NetworkerSettings settings){
+int start(Networker* self, struct NetworkerSettings* s){
+    struct NetworkerSettings settings = *s;
     if (self->initiated > 0){
         return 0;
     }
-    
+    self->client_num = s->max_clients;
     int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock < 0){
         return -errno;
@@ -136,14 +80,26 @@ int start(Networker* self, struct NetworkerSettings settings){
         self->clients[i].response = NULL;
     }
 
-    self->author_log = malloc(self->client_num*sizeof(u64));
+    self->author_log = calloc(self->client_num,sizeof(u64));
     if(!self->author_log){
+        free(self->clients);
+        close(sock);
         return -ENOMEM;
     }
-
+    self->ring = calloc(1,sizeof(struct io_uring));
+    if (!self->ring){
+        free(self->author_log);
+        free(self->clients);
+        close(sock);
+        return -ENOMEM;
+    }
     {
-        int res = io_uring_queue_init(self->client_num, self->ring, 0);
+        int res = io_uring_queue_init(self->client_num>0?self->client_num:1, self->ring, 0);
         if(res < 0) {
+            free(self->author_log);
+            free(self->clients);
+            free(self->ring);
+            close(sock);
             return res;
         }
     }
@@ -302,7 +258,7 @@ int proc(Networker* self){
 
 
 int apply_client_response(Networker* self, u64 client_id, unsigned char* buffer, u64 buffer_size, int compression_algorithm){
-    if (!(client_id < self->client_num-1 && self->clients[client_id].state == Processing)){
+    if (!(client_id < self->client_num && self->clients[client_id].state == Processing)){
         return -ENOPKG;
     }
     MessageHeaders headers;
@@ -320,12 +276,6 @@ int apply_client_response(Networker* self, u64 client_id, unsigned char* buffer,
     self->clients[client_id].state = Ready;
     return 0;
 }
-
-typedef struct {
-    Client* client;
-    usize exists;
-} SomeClient;  
-
 SomeClient get_client(Networker* self){
     for(usize i = 0; i < self->client_num; i ++) {
         if(self->clients[i].state == Available){

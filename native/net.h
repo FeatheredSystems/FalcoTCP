@@ -65,7 +65,7 @@ enum Operation {
 
 // Networker configuration
 struct NetworkerSettings {
-    char host[12];
+    char host[16];
     unsigned short port;
     unsigned short max_queue;
     unsigned short max_clients;
@@ -77,7 +77,7 @@ typedef struct {
     int sock;
     u64 client_num;
     Client* clients;
-    struct io_uring ring;
+    struct io_uring *ring;
     u64* author_log;
 } Networker;
 
@@ -88,7 +88,7 @@ typedef struct {
 } SomeClient;
 
 // Function declarations
-int start(Networker* self, struct NetworkerSettings settings);
+int start(Networker* self, struct NetworkerSettings* s);
 int proc(Networker* self);
 int apply_client_response(Networker* self, u64 client_id, unsigned char* buffer, u64 buffer_size, int compression_algorithm);
 SomeClient get_client(Networker* self);

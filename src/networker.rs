@@ -62,7 +62,7 @@ fn get_mutex<T>(input: T) -> Mutex<T> {
 }
 
 impl Networker {
-    /// The "new" function creates a new "Networker" with the given settings
+    /// The "new" function creates and initialize a new "Networker" with the given settings
     /// - Host: The IP where the networker will be listening to
     /// - Port: The port
     /// - Max_queue: The maximum count of sockets that can be left hanging before the server accepts it
@@ -74,7 +74,7 @@ impl Networker {
             return Err(Error::new(ErrorKind::InvalidInput, "Invalid IPv4 host"));
         }
         let mut raw_net = RawNetworker::default();
-        let mut raw_host: [i8; 16] = [0i8; 16];
+        let raw_host: [i8; 16] = [0i8; 16];
         let b = host.as_bytes();
         if b.len() > 16 {
             return Err(Error::new(
@@ -84,18 +84,22 @@ impl Networker {
         } else {
             unsafe {
                 // zero-cost cast u8 -> i8
-                ptr::copy_nonoverlapping(b.as_ptr() as *const i8, raw_host.as_mut_ptr(), b.len());
+                ptr::copy_nonoverlapping(
+                    b.as_ptr() as *const i8,
+                    raw_host.as_ptr() as *mut i8,
+                    b.len(),
+                );
             }
         }
-
+        let c = if max_clients == 0 { 1 } else { max_clients };
         let result = unsafe {
             start(
                 &mut raw_net,
-                NetworkerSettings {
+                &mut NetworkerSettings {
                     host: raw_host,
                     port,
                     max_queue,
-                    max_clients,
+                    max_clients: c,
                 },
             )
         };
@@ -398,7 +402,7 @@ pub struct SomeClient {
 // Extern functions
 #[link(name = "networker")]
 unsafe extern "C" {
-    fn start(self_: *mut RawNetworker, settings: NetworkerSettings) -> c_int;
+    fn start(self_: *mut RawNetworker, settings: *mut NetworkerSettings) -> c_int;
     fn apply_client_response(
         self_: *mut RawNetworker,
         client_id: u64,
