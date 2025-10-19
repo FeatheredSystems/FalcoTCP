@@ -419,6 +419,7 @@ unsafe extern "C" {
 // test routine
 
 #[cfg(test)]
+#[cfg(all(feature = "falco-server", feature = "falco-client"))]
 mod networker_test {
     #[cfg(not(feature = "tokio-runtime"))]
     use std::thread;
@@ -432,8 +433,6 @@ mod networker_test {
     #[cfg(feature = "encryption")]
     use aes_gcm::{Aes256Gcm, KeyInit};
 
-    #[cfg(not(feature = "heuristics"))]
-    use crate::CompressionAlgorithm;
     use crate::{
         falco_pipeline::{Var, pipeline_receive, pipeline_send},
         networker::Networker,
