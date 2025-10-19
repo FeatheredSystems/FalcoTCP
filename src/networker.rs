@@ -505,11 +505,14 @@ mod networker_test {
                     true,
                 )
                 .unwrap();
-                client
-                    .request(vec![1u8; 100])
-                    .unwrap()
-                    .iter()
-                    .for_each(|n| assert_eq!(*n, 254));
+                for _ in 1..1_000_000 {
+                    // stress test
+                    client
+                        .request(vec![1u8; 100])
+                        .unwrap()
+                        .iter()
+                        .for_each(|n| assert_eq!(*n, 254));
+                }
                 mutexy.lock().unwrap().sub_assign(1);
             });
         }

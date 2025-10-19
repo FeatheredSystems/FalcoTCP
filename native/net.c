@@ -223,14 +223,14 @@ int proc(Networker* self){
         struct io_uring_cqe *cqe;
         io_uring_wait_cqe(&ring, &cqe);
         __S32_TYPE res = cqe->res;
-
+        io_uring_cqe_seen(&ring, cqe);
         if(res < 0){
             self->clients[ptr].state = Kill;
             continue;
         }
 
         int what = cqe->user_data;
-        io_uring_cqe_seen(&ring, cqe);
+        
         if(cqe->res < 0){
             continue;
         }
