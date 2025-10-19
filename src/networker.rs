@@ -1,4 +1,4 @@
-use crate::{CompressionAlgorithm, MessageHeaders};
+use crate::MessageHeaders;
 use std::io::{Error, ErrorKind};
 use std::net::Ipv4Addr;
 use std::os::raw::{c_char, c_int, c_uchar, c_ushort};
@@ -282,7 +282,7 @@ impl Drop for ClientHandler {
 
 #[cfg(not(feature = "tokio-runtime"))]
 impl ClientHandler {
-    pub fn get_request(&self) -> (CompressionAlgorithm, Vec<u8>) {
+    pub fn get_request(&self) -> (crate::CompressionAlgorithm, Vec<u8>) {
         let _lock = unsafe { (*self.mutex).lock().unwrap() };
         let mut vec: Vec<u8> =
             unsafe { Vec::with_capacity((*self.inner).req_headers.size as usize) };
@@ -299,7 +299,7 @@ impl ClientHandler {
     pub fn apply_response(
         self,
         response: Vec<u8>,
-        compression_algorithm: CompressionAlgorithm,
+        compression_algorithm: crate::CompressionAlgorithm,
     ) -> Result<(), Error> {
         let _lock = unsafe { (*self.mutex).lock().unwrap() };
         let mut response = response;
