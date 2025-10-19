@@ -30,7 +30,6 @@ LZ4 = ["lz4_flex"]
 ZSTD = ["zstd"]
 dynamic-uring-link = []
 dev-redundancies = []
-networker-testing = []
 [dependencies]
 aes-gcm = {version="=0.10.3",optional=true}
 tokio = {version="=1.47.1",features=["full"], optional=true}

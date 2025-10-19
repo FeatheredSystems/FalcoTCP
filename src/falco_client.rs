@@ -79,7 +79,7 @@ impl FalcoClient {
     fn mitigate(&self, input: Vec<u8>, key: usize) -> Result<Vec<u8>, Error> {
         self.pool.write().unwrap().swap_remove(key);
         self.generate(1)?;
-        Ok(self.request(input)?)
+        self.request(input)
     }
     pub fn generate(&self, count: usize) -> Result<(), Error> {
         let mut pool = self.pool.write().unwrap();
@@ -89,7 +89,7 @@ impl FalcoClient {
         pool.reserve_exact(count);
         for _ in 0..count {
             pool.push(Arc::new(Mutex::new(Client::new(
-                self.target.1.clone(),
+                self.target.1,
                 &self.target.0.clone(),
             )?)));
         }

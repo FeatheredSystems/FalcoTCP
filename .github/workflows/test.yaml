@@ -72,12 +72,6 @@ jobs:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cache target directory
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-target-${{ matrix.features.name }}-${{ hashFiles('**/Cargo.lock') }}
-
       - name: Run tests - ${{ matrix.features.name }}
         run: cargo test ${{ matrix.features.flags }} --lib
 
