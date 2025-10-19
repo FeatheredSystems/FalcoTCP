@@ -76,10 +76,10 @@ impl Networker {
         let mut raw_net = RawNetworker::default();
         let mut raw_host: [i8; 16] = [0i8; 16];
         let b = host.as_bytes();
-        if b.len() != 16 {
+        if b.len() > 16 {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                "Invalid host, should be 16 bytes.",
+                "Invalid host, should be at most 16 bytes.",
             ));
         } else {
             unsafe {
@@ -384,7 +384,7 @@ pub struct RawNetworker {
     pub sock: c_int,
     pub client_num: u64,
     clients: *mut Client,
-    pub ring: *mut [u8; 0], // opaque io_uring struct, we don't manipulate it in Rust
+    pub ring: *mut [u8; 0],
     pub author_log: *mut u64,
 }
 
@@ -443,7 +443,7 @@ mod networker_test {
             #[cfg(feature = "encryption")]
             cipher: Aes256Gcm::new_from_slice(&[2u8; 32]).unwrap(),
             #[cfg(not(feature = "heuristics"))]
-            compression: CompressionAlgorithm::None,
+            compression: crate::enums::CompressionAlgorithm::None,
         };
         const WORKERS: usize = 2;
         const CLIENTS: usize = 2;
