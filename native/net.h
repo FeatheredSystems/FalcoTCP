@@ -23,6 +23,7 @@ enum State {
     Ready = 8,
     WrittingSock = 9,
     Kill = 10,
+    Finished_WS = 11,
 };
 
 // Message headers

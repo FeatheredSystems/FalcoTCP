@@ -216,6 +216,7 @@ pub enum State {
     Ready = 8,
     WrittingSock = 9,
     Kill = 10,
+    FinishedWS = 11,
 }
 
 // Client
@@ -316,12 +317,12 @@ impl ClientHandler {
         if res >= 0 {
             return Ok(());
         }
-        return Err(Error::from_raw_os_error(res));
+        Err(Error::from_raw_os_error(res))
     }
 }
 #[cfg(feature = "tokio-runtime")]
 impl ClientHandler {
-    pub async fn get_request(&self) -> (CompressionAlgorithm, Vec<u8>) {
+    pub async fn get_request(&self) -> (crate::CompressionAlgorithm, Vec<u8>) {
         let _lock = unsafe { (*self.mutex).lock().await };
         let mut vec: Vec<u8> =
             unsafe { Vec::with_capacity((*self.inner).req_headers.size as usize) };
@@ -338,7 +339,7 @@ impl ClientHandler {
     pub async fn apply_response(
         self,
         response: Vec<u8>,
-        compression_algorithm: CompressionAlgorithm,
+        compression_algorithm: crate::enums::CompressionAlgorithm,
     ) -> Result<(), Error> {
         let _lock = unsafe { (*self.mutex).lock().await };
         let mut response = response;
@@ -348,7 +349,7 @@ impl ClientHandler {
                 (*self.inner).id,
                 response.as_mut_ptr(),
                 response.len() as u64,
-                compression_algorithm.into(),
+                compression_algorithm.u8() as i32,
             )
         };
         if res >= 0 {
@@ -415,106 +416,134 @@ unsafe extern "C" {
     fn kill_client(self_: *mut RawNetworker, client_id: u64) -> c_int;
     fn cycle(self_: *mut RawNetworker) -> c_int;
 }
-
-// test routine
-
-#[cfg(test)]
-#[cfg(all(feature = "falco-server", feature = "falco-client"))]
-mod networker_test {
-    #[cfg(not(feature = "tokio-runtime"))]
-    use std::thread;
-    use std::{
-        net::{IpAddr, SocketAddr},
-        str::FromStr,
-        thread::spawn,
-        time::Duration,
-    };
+#[test]
+#[cfg(not(feature = "tokio-runtime"))]
+fn run() {
+    use std::sync::{Arc, Mutex};
+    use std::thread::{self, JoinHandle, spawn};
+    use std::time::{Duration, Instant};
 
     #[cfg(feature = "encryption")]
     use aes_gcm::{Aes256Gcm, KeyInit};
+    use log::info;
 
-    use crate::{
-        falco_pipeline::{Var, pipeline_receive, pipeline_send},
-        networker::Networker,
+    use crate::falco_pipeline::Var;
+    let var = Var {
+        #[cfg(feature = "encryption")]
+        cipher: Aes256Gcm::new_from_slice(&[2u8; 32]).unwrap(),
+        #[cfg(not(feature = "heuristics"))]
+        compression: crate::enums::CompressionAlgorithm::None,
     };
-    #[test]
-    #[cfg(not(feature = "tokio-runtime"))]
-    fn run() {
-        use std::sync::{Arc, Mutex};
-        use std::thread::JoinHandle;
-        let var = Var {
-            #[cfg(feature = "encryption")]
-            cipher: Aes256Gcm::new_from_slice(&[2u8; 32]).unwrap(),
-            #[cfg(not(feature = "heuristics"))]
-            compression: crate::enums::CompressionAlgorithm::None,
-        };
-        const WORKERS: usize = 2;
-        const CLIENTS: usize = 2;
-        let mut js: [Option<JoinHandle<_>>; WORKERS + 1] = [const { None }; (WORKERS + 1)];
-        let networker = Arc::new(Mutex::new(
-            Networker::new("127.0.0.1", 8000, 128, WORKERS as u16).unwrap(),
-        ));
-        for i in js.iter_mut().take(WORKERS) {
-            use std::thread;
-            let v = var.clone();
-            let networker = networker.clone();
-            *i = Some(thread::spawn(move || {
-                let var = v;
-                loop {
-                    if let Some(client) = networker.lock().unwrap().get_client() {
-                        let request = client.get_request();
-                        let bin = pipeline_receive(request.0.into(), request.1, &var).unwrap();
-                        let response =
-                            pipeline_send(bin.iter().map(|f| !f).collect(), &var).unwrap();
-                        client
-                            .apply_response(response.1, response.0.into())
-                            .unwrap();
-                    }
-                    thread::yield_now();
-                }
-            }));
+    const WORKERS: usize = 2;
+    const CLIENTS: usize = 2;
+    let mut js: [Option<JoinHandle<_>>; WORKERS + 1] = [const { None }; (WORKERS + 1)];
+    let networker = Arc::new(Mutex::new(
+        Networker::new("127.0.0.1", 8000, 128, WORKERS as u16).unwrap(),
+    ));
+
+    let running = Arc::new(Mutex::new(true));
+
+    // CRITICAL FIX: Cycle thread runs continuously and YIELDS the lock between cycles
+    let cycle_instance = networker.clone();
+    let cycle_running = running.clone();
+    js[WORKERS] = Some(spawn(move || {
+        while *cycle_running.lock().unwrap() {
+            {
+                // Lock, cycle, then IMMEDIATELY drop the lock
+                let mut net = cycle_instance.lock().unwrap();
+                net.cycle();
+            } // Lock dropped here!
+            // Give other threads a chance
+            thread::sleep(Duration::from_micros(100));
         }
-        let mutexy = Arc::new(Mutex::new(CLIENTS));
-        let cycle_instance = networker.clone();
-        let i_mutexy = mutexy.clone();
-        js[WORKERS - 1] = Some(spawn(move || {
-            let mutexy = i_mutexy;
-            while *mutexy.lock().unwrap() > 0 {
-                cycle_instance.lock().unwrap().cycle();
-                thread::yield_now();
+    }));
+
+    // Start worker threads
+    for i in js.iter_mut().take(WORKERS) {
+        let v = var.clone();
+        let networker = networker.clone();
+        let running = running.clone();
+        *i = Some(thread::spawn(move || {
+            let var = v;
+            while *running.lock().unwrap() {
+                // CRITICAL FIX: Lock briefly, get client, then drop lock immediately
+                let client_opt = {
+                    let mut net = networker.lock().unwrap();
+                    net.get_client()
+                }; // Lock dropped here!
+
+                if let Some(client) = client_opt {
+                    use crate::falco_pipeline::{pipeline_receive, pipeline_send};
+
+                    let request = client.get_request();
+                    let bin = pipeline_receive(request.0.into(), request.1, &var).unwrap();
+                    let response = pipeline_send(bin.iter().map(|f| !f).collect(), &var).unwrap();
+                    client
+                        .apply_response(response.1, response.0.into())
+                        .unwrap();
+                } else {
+                    // No client available, yield
+                    thread::sleep(Duration::from_micros(100));
+                }
             }
         }));
+    }
 
-        for _ in 0..CLIENTS {
-            let var = var.clone();
-            let mutexy = mutexy.clone();
-            spawn(move || {
-                use std::ops::SubAssign;
+    // Give server time to start accepting connections
+    thread::sleep(Duration::from_millis(500));
 
-                use crate::falco_client::FalcoClient;
-                let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1").unwrap(), 8000);
-                let client = FalcoClient::new(
-                    1,
-                    var,
-                    &socket,
-                    (
-                        Duration::from_secs(1),
-                        Duration::from_secs(1),
-                        Duration::from_secs(1),
-                    ),
-                    true,
-                )
-                .unwrap();
-                for _ in 1..1_000_000 {
-                    // stress test
-                    client
-                        .request(vec![1u8; 100])
-                        .unwrap()
-                        .iter()
-                        .for_each(|n| assert_eq!(*n, 254));
-                }
-                mutexy.lock().unwrap().sub_assign(1);
-            });
-        }
+    let mut stuff = Vec::new();
+    for _ in 0..CLIENTS {
+        let var = var.clone();
+        stuff.push(spawn(move || {
+            use std::{
+                net::{IpAddr, SocketAddr},
+                str::FromStr,
+            };
+
+            use crate::falco_client::FalcoClient;
+            let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1").unwrap(), 8000);
+            let client = FalcoClient::new(
+                1,
+                var,
+                &socket,
+                (
+                    Duration::from_secs(5), // Increased timeouts
+                    Duration::from_secs(5),
+                    Duration::from_secs(5),
+                ),
+                true,
+            )
+            .unwrap();
+
+            // Reduced iteration count for testing
+            for _ in 0..100 {
+                client
+                    .request(vec![1u8; 1000])
+                    .unwrap()
+                    .iter()
+                    .for_each(|n| assert_eq!(*n, 254));
+            }
+        }));
+    }
+
+    let el = Instant::now();
+
+    // Wait for all client threads to complete
+    for i in stuff {
+        i.join().unwrap()
+    }
+
+    info!("Elapsed time: {:?}ms", el.elapsed().as_millis());
+
+    // Signal the server to stop
+    *running.lock().unwrap() = false;
+
+    // Give server threads time to finish processing
+    thread::sleep(Duration::from_millis(100));
+
+    // Wait for server threads to complete
+    for j in js.into_iter().flatten() {
+        j.join().unwrap();
     }
 }

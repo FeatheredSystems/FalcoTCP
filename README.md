@@ -1,29 +1,30 @@
 # FalcoTCP
-This is a connection protocol for communication between trusted endpoints, such as server-to-microservice or server-database interactions. The implementation is very lightweight and has minimal overhead alongside a straightforward API.
+A network handler designed for a trusted end-to-end connection, such as a microservice-to-microservice connection. It uses a pre-shared key for on-the-fly encryption, for performance's sake.
 
-## Protocol
-Works with the server listening to the host address. When a client tries to connect, it sends a chunk of bytes encrypted with AES-GCM-256. If the server decrypts the request, the connection is successfully established; the TCP socket is shut down otherwise.
-
-After connecting, every connection has a lifetime of 60 seconds, the countdown being reset after any sort of interaction, which can be either a ping or a message.
-
-When the server receives a message from the client, it decrypts the message (everything in the network is encrypted by default) and calls a function (message handler) which gets these bytes as parameters and returns the encrypted message and sends it back to the client. It decrypts the bytes from the server and returns them to the client runtime.
-
-## Implementations
-Currently, it has only a single connection handler in Rust, but I may implement it for both Python and Go in the future.
-
-## Documentation
-[https://falcotcp-docs.pages.dev/](https://falcotcp-docs.pages.dev/)
+## Compatibility 
+Servers only work on Linux systems with a kernel version that supports IO Uring (5.1+), clients use the Rust standard library networking. That said, clients are portable wherever Rust is supported.
 
 ## Contributions
-As HTTP, FalcoTCP is a protocol, a way of interacting with networking. That said, you may and are free to create things with it. But, this specific repository is restricted to contributions due to curatorial reasons since most FeatheredSystems projects have it as a dependency. If you think a change to this repo or protocol might be interesting, please provide feedback.
+Raise a pull request, send me an email with suggestions (At this address: "falcotcp@proton.me"), raise an issue, or reach me anywhere coherent.
 
-## Protocol authorship
-The protocol is officially maintained by FeatheredSystems, even while it is open source, and we allow the community to create their own versions. Any official release of the protocol, per se, will be done within FeatheredSystems.
+## Security
+It relies on the pre-shared key. That being said, both ends must handle the key properly.
 
-## License info
-This repository is under the Apache-2.0 license; the protocol itself is under the MIT license.
+If you find a sensitive spot, a vulnerability, send me an email to the mentioned endpoint (This address: "falcotcp@proton.me").
 
-## Feedback / Security reports
-If you find either a security problem, bug, want to give feedback, or suggest something, email me at the project email address.
-Email: falcotcp@gmail.com
-You can also create an Issue as long as you are not exposing any security vulnerability. For such cases, reach me at the email.
+## Suggestions
+Appreciated, to send yours, send me an email at the address I mentioned (falcotcp@proton.me) several times, raise an issue, or create a discussion.
+
+## Usability
+I tried making the interface as friendly as possible. If you find something awkward, raise a suggestion (through the mentioned methods).
+
+## Docs and Installation
+Work in progress.
+
+### Personal considerations
+The software was written with performance in mind; it may be faster with other handlers. But I would rather not mention the "how good the project is" type of claims; they are sensitive to failures. Like a subtle bug, for instance, that said, expect it to be brutally fast, but in your workload, you should measure whether it is truly useful. Most of the time, performance isn't the only important thing to think about when calculating trade-offs.
+
+Thanks for reading this, and for visiting this work.
+
+### Future packages
+I am intending to write a Rust package and maybe a C one, no python, go, or whatever other language. If you need a version for these tools, you may get in future an interface from the C written ones. All not focused to work with the language semantics (Go, and Python tend to have), but with the actual functionality.

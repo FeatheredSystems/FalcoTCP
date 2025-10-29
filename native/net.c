@@ -78,6 +78,7 @@ int start(Networker* self, struct NetworkerSettings* s){
         self->clients[i].id = i;
         self->clients[i].request = NULL;
         self->clients[i].response = NULL;
+        self->clients[i].state = NonExistent;
     }
 
     self->author_log = calloc(self->client_num,sizeof(u64));
@@ -132,7 +133,7 @@ int proc(Networker* self){
         }        
         if(self->clients[i].state == Idle){
             struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-            if(now-self->clients[i].activity > 1200){
+            if((now-self->clients[i].activity) > 1200){
                 sqe->user_data = OP_Close;
                 io_uring_prep_close(sqe, self->clients[i].sock);
                 self->clients[i].state = NonExistent;
@@ -142,7 +143,7 @@ int proc(Networker* self){
             }
             sqe->user_data = OP_Read;
             self->clients[i].state = Finished_H;
-            io_uring_prep_read(sqe,self->clients[i].sock, (char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, MESSAGE_HEADERS_SIZE, 0);
+            io_uring_prep_read(sqe,self->clients[i].sock, (char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, MESSAGE_HEADERS_SIZE-self->clients[i].recv_offset, 0);
             REGISTER;
             continue;
         }
@@ -169,7 +170,7 @@ int proc(Networker* self){
             struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
             sqe->user_data = OP_Read;
             self->clients[i].state = Finished_R;
-            io_uring_prep_read(sqe,self->clients[i].sock,self->clients[i].request + self->clients[i].recv_offset,self->clients[i].req_headers.size,0);
+            io_uring_prep_read(sqe,self->clients[i].sock,self->clients[i].request + self->clients[i].recv_offset,self->clients[i].req_headers.size-self->clients[i].recv_offset,0);
             REGISTER;
             continue;
         }
@@ -185,30 +186,41 @@ int proc(Networker* self){
         }
 
         if(self->clients[i].state == Ready){
-            struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-            sqe->user_data = OP_Write;
             self->clients[i].writev_offset = 0;
             self->clients[i].activity = now;
             self->clients[i].state = WrittingSock;
-            REGISTER;
             continue;
         }
         if(self->clients[i].state == WrittingSock){
             struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
             sqe->user_data = OP_Write;
-            io_uring_prep_write(sqe, self->clients[i].sock, (self->clients[i].response)+self->clients[i].writev_offset, self->clients[i].response_size,0);
-            if(self->clients[i].writev_offset == self->clients[i].response_size){
-                self->clients[i].state = Idle; 
-            }
+            io_uring_prep_write(sqe, self->clients[i].sock, 
+                       (self->clients[i].response) + self->clients[i].writev_offset, 
+                       self->clients[i].response_size - self->clients[i].writev_offset, 0);
+            self->clients[i].state = Finished_WS;
             REGISTER;
             continue;
         }
+        if(self->clients[i].state == Finished_WS){
+            if(self->clients[i].writev_offset >= self->clients[i].response_size){
+                self->clients[i].writev_offset = 0;
+                self->clients[i].state = Idle;
+            }else{
+                self->clients[i].state = WrittingSock;
+            }
+            continue;
+        }
         if(self->clients[i].state == Kill){
+            struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
+            sqe->user_data = OP_Close;
+            io_uring_prep_close(sqe, self->clients[i].sock);
             self->clients[i].state = NonExistent;
             self->clients[i].recv_offset = 0;
             self->clients[i].writev_offset = 0;
             sfree(self->clients[i].response);
             sfree(self->clients[i].request);
+            REGISTER;
+            continue;
         }
     }
     {
@@ -244,8 +256,12 @@ int proc(Networker* self){
             continue;
         }
         if(what == OP_SocketAcc){
+            u64 saved_id = self->clients[ptr].id;
+            memset(&self->clients[ptr], 0, sizeof(Client));
             self->clients[ptr].sock = res;
             self->clients[ptr].state = Idle;
+            self->clients[ptr].activity = now;
+            self->clients[ptr].id = saved_id;
             continue;
         }
     }
