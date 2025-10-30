@@ -1,0 +1,32 @@
+name: Deploy Documentation 
+
+on:
+  push:
+    branches:
+      - main   
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      WORKSPACE: ${{ github.workspace }}/workspace
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Friendly workspace
+        run: mkdir -p $WORKSPACE 
+
+      - name: Get FurnariusMark
+        run: git clone https://github.com/ttd3v/FurnariusMark $WORKSPACE
+
+      - name: Build documentation
+        run: $WORKSPACE/FurnariusMark/FurnariusMark -f ./docs/documentation.md -t FalcoTCP 
+      - name: Polish for satisfy Github
+        run: mv ./FalcoTCP.html ./docs/index.html
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v6
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+
