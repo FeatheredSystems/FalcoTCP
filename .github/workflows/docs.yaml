@@ -15,10 +15,10 @@ jobs:
         run: git clone https://github.com/ttd3v/FurnariusMark     
 
       - name: Install FurnariusMark
-        run: gcc -O3 ./FurnariusMark/main.c -o ./FurnariusMark
+        run: gcc -O3 ./FurnariusMark/main.c -o ./FURNARIUSMARKBINARYBINARYBINARYBINARYBINARY
 
       - name: Build documentation
-        run: ./FurnariusMark -f ./docs/documentation.md -t FalcoTCP 
+        run: ./FURNARIUSMARKBINARYBINARYBINARYBINARYBINARY -f ./docs/documentation.md -t FalcoTCP 
 
       - name: Polish for satisfy Github
         run: mv ./FalcoTCP.html ./docs/index.html
