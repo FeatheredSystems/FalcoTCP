@@ -7,20 +7,15 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      WORKSPACE: ${{ github.workspace }}/workspace
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Friendly workspace
-        run: mkdir -p $WORKSPACE 
-
       - name: Get FurnariusMark
-        run: git clone https://github.com/ttd3v/FurnariusMark $WORKSPACE
-      
+        run: git clone https://github.com/ttd3v/FurnariusMark     
+
       - name: Install FurnariusMark
-        run: gcc -O3 $WORKSPACE/FurnariusMark/main.c -o ./FurnariusMark
+        run: gcc -O3 ./FurnariusMark/main.c -o ./FurnariusMark
 
       - name: Build documentation
         run: ./FurnariusMark -f ./docs/documentation.md -t FalcoTCP 
