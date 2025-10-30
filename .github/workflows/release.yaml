@@ -1,0 +1,19 @@
+on:
+  release:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Cargo dry-run
+        run: cargo publish --dry-run
+
+      - name: Cargo login
+        run: cargo login ${{ secrets.FALCOTCPRELEASETOKEN }}
+
+      - name: Cargo publish
+        run: cargo publish
+
