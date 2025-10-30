@@ -19,11 +19,12 @@ jobs:
       - name: Get FurnariusMark
         run: git clone https://github.com/ttd3v/FurnariusMark $WORKSPACE
       
-      - name: Make FurnariusMark executable
-        run: chmod +x $WORKSPACE/FurnariusMark/FurnariusMark
+      - name: Install FurnariusMark
+        run: gcc -O3 $WORKSPACE/FurnariusMark/main.c -o ./FurnariusMark
 
       - name: Build documentation
-        run: $WORKSPACE/FurnariusMark/FurnariusMark -f ./docs/documentation.md -t FalcoTCP 
+        run: ./FurnariusMark -f ./docs/documentation.md -t FalcoTCP 
+
       - name: Polish for satisfy Github
         run: mv ./FalcoTCP.html ./docs/index.html
 
