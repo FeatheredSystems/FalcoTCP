@@ -18,6 +18,9 @@ jobs:
 
       - name: Get FurnariusMark
         run: git clone https://github.com/ttd3v/FurnariusMark $WORKSPACE
+      
+      - name: Make FurnariusMark executable
+        run: chmod +x $WORKSPACE/FurnariusMark/FurnariusMark
 
       - name: Build documentation
         run: $WORKSPACE/FurnariusMark/FurnariusMark -f ./docs/documentation.md -t FalcoTCP 
