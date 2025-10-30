@@ -1,10 +1,10 @@
 [package]
 name = "falcotcp"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2024"
-description = "TCP server/client with AES-256-GCM encryption."
+description = "TCP server/client"
 repository = "https://github.com/FeatheredSystems/FalcoTCP"
-documentation = "https://falcotcp-docs.pages.dev/"
+documentation = "https://ttd3v.github.io/FurnariusMark/"
 license = "Apache-2.0"
 build="build.rs"
 
@@ -15,7 +15,7 @@ cc = "1.2.41"
 log = "0.4.28"
 
 [features]
-default = ["falco-server","heuristics","falco-client","encryption"]
+default = []
 heubias-performance = []
 heubias-balance = []
 heubias-ratio = []
