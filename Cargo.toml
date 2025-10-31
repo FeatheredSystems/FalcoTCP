@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2024"
 description = "TCP server/client"
 repository = "https://github.com/FeatheredSystems/FalcoTCP"
-documentation = "https://ttd3v.github.io/FurnariusMark/"
+documentation = "ttd3v.github.io/FalcoTCP/"
 license = "Apache-2.0"
 build="build.rs"
 
