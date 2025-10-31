@@ -1,185 +1,6 @@
 ::html::
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
 
-        body {
-            background: #0b0f1a;
-            color: #e2e8f0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-            line-height: 1.6;
-            position: relative;
-        }
-
-        .bloom-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100vh;
-            pointer-events: none;
-            z-index: 0;
-            overflow: hidden;
-        }
-
-        .bloom {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(100px);
-            opacity: 0.12;
-            transition: all 0.5s ease-out;
-        }
-
-        .bloom-1 {
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0) 70%);
-            top: -10%;
-            left: -5%;
-        }
-
-        .bloom-2 {
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(96, 165, 250, 0.3) 0%, rgba(96, 165, 250, 0) 70%);
-            top: 20%;
-            right: 10%;
-        }
-
-        .bloom-3 {
-            width: 700px;
-            height: 700px;
-            background: radial-gradient(circle, rgba(30, 64, 175, 0.35) 0%, rgba(30, 64, 175, 0) 70%);
-            bottom: -15%;
-            left: 15%;
-        }
-
-        .bloom-4 {
-            width: 450px;
-            height: 450px;
-            background: radial-gradient(circle, rgba(147, 197, 253, 0.25) 0%, rgba(147, 197, 253, 0) 70%);
-            top: 50%;
-            right: 20%;
-        }
-
-        .bloom-5 {
-            width: 550px;
-            height: 550px;
-            background: radial-gradient(circle, rgba(219, 234, 254, 0.2) 0%, rgba(219, 234, 254, 0) 70%);
-            top: 70%;
-            left: 40%;
-        }
-
-        section,header {
-            position: relative;
-            z-index: 1;
-            max-width: 900px;
-            margin: 0 auto;
-            padding-left: 3rem;
-            padding-right: 3rem;
-        }
-
-        h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #f8fafc;
-            margin-bottom: 1.5rem;
-            margin-top: 2rem;
-        }
-
-        h2 {
-            font-size: 2rem;
-            font-weight: 600;
-            color: #cbd5e1;
-            margin-top: 3rem;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid rgba(59, 130, 246, 0.2);
-        }
-
-        h3 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: #94a3b8;
-            margin-top: 2rem;
-            margin-bottom: 0.75rem;
-        }
-
-        p {
-            color: #94a3b8;
-            margin-bottom: 1rem;
-            font-size: 1rem;
-        }
-
-        a {
-            color: #60a5fa;
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        a:hover {
-            color: #93c5fd;
-            text-decoration: underline;
-        }
-
-        pre {
-            background: rgba(15, 23, 42, 0.8);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin: 1.5rem 0;
-            overflow-x: auto;
-        }
-
-        code {
-            background: rgba(15, 23, 42, 0.6);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            border-radius: 4px;
-            padding: 0.2rem 0.4rem;
-            font-family: 'Courier New', 'Consolas', monospace;
-            font-size: 0.9em;
-            color: #e2e8f0;
-        }
-
-        pre code {
-            background: none;
-            border: none;
-            padding: 0;
-            color: #e2e8f0;
-        }
-
-        blockquote {
-            background: rgba(30, 64, 175, 0.1);
-            border-left: 4px solid rgba(59, 130, 246, 0.5);
-            padding: 1rem 1.5rem;
-            margin: 1.5rem 0;
-            color: #cbd5e1;
-        }
-
-        blockquote strong {
-            color: #f8fafc;
-        }
-
-        em, i {
-            color: #cbd5e1;
-        }
-
-        strong {
-            color: #f8fafc;
-            font-weight: 600;
-        }
-    .hl-keyword { color: #c678dd; font-weight: 500; }
-    .hl-type    { color: #e5c07b; }
-    .hl-func    { color: #61afef; }
-    .hl-string  { color: #98c379; }
-    .hl-number  { color: #d19a66; }
-    .hl-comment { color: #5c6370; font-style: italic; }
-    .hl-field   { color: #abb2bf; }
-    </style>
-
+<style> * { margin: 0; padding: 0; box-sizing: border-box; } body { background: #0a0a0a; color: #e5e5e5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif; line-height: 1.6; position: relative; } .bloom-container { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; pointer-events: none; z-index: 0; overflow: hidden; } .bloom { position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.08; transition: all 0.5s ease-out; } .bloom-1 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0) 70%); top: -10%; left: -5%; } .bloom-2 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0) 70%); top: 20%; right: 10%; } .bloom-3 { width: 700px; height: 700px; background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 70%); bottom: -15%; left: 15%; } .bloom-4 { width: 450px; height: 450px; background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 70%); top: 50%; right: 20%; } .bloom-5 { width: 550px; height: 550px; background: radial-gradient(circle, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 70%); top: 70%; left: 40%; } section, header { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding-left: 3rem; padding-right: 3rem; } h1 { font-size: 2.5rem; font-weight: 700; color: #ffffff; margin-bottom: 1.5rem; margin-top: 2rem; } h2 { font-size: 2rem; font-weight: 600; color: #d4d4d4; margin-top: 3rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.2); } h3 { font-size: 1.5rem; font-weight: 600; color: #a3a3a3; margin-top: 2rem; margin-bottom: 0.75rem; } p { color: #a3a3a3; margin-bottom: 1rem; font-size: 1rem; } a { color: #d4d4d4; text-decoration: none; transition: color 0.2s; border-bottom: 1px solid rgba(255, 255, 255, 0.3); } a:hover { color: #ffffff; text-decoration: none; } pre { background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 1.5rem; margin: 1.5rem 0; overflow-x: auto; } code { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0.2rem 0.4rem; font-family: 'Courier New', 'Consolas', monospace; font-size: 0.9em; color: #e5e5e5; } pre code { background: none; border: none; padding: 0; color: #e5e5e5; } blockquote { background: rgba(255, 255, 255, 0.05); border-left: 4px solid rgba(255, 255, 255, 0.4); padding: 1rem 1.5rem; margin: 1.5rem 0; color: #d4d4d4; } blockquote strong { color: #ffffff; } em, i { color: #d4d4d4; } strong { color: #ffffff; font-weight: 600; } .hl-keyword { color: #ffffff; font-weight: 500; } .hl-type    { color: #d4d4d4; } .hl-func    { color: #e5e5e5; } .hl-string  { color: #a3a3a3; } .hl-number  { color: #b8b8b8; } .hl-comment { color: #525252; font-style: italic; } .hl-field   { color: #c2c2c2; } footer { text-align: center; padding: 4rem 3rem 2rem; color: #737373; font-size: 0.9rem; position: relative; z-index: 1; } </style> 
     <div class="bloom-container">
         <div class="bloom bloom-1"></div>
         <div class="bloom bloom-2"></div>
@@ -212,6 +33,7 @@
 <header>
 ::html::
 
+
 # FalcoTCP
 A network handler designed for a trusted end-to-end connection, such as a microservice-to-microservice connection. It uses a pre-shared key for on-the-fly encryption, for performance's sake.
 
@@ -222,52 +44,52 @@ A network handler designed for a trusted end-to-end connection, such as a micros
 ::html::
 
 # Networker
-This is the server engine, it has a clock-cycle that handle connections.
+This is the server engine; it has a clock cycle that handles connections.
 
 ## Headers
-Every request must include headers, they tell how long is the payload, and what compression algorithm is being used (If any). The headers size is 9 in bytes, the first 8 bytes being the 64-bit unsigned integer that represent the payload size, and a single byte flagging the compression algorithm. Both request, and response, use this header format.
+Every request must include headers; they indicate the payload length and the compression algorithm used (if any). The header size is 9 in bytes, the first 8 bytes being the 64-bit unsigned integer that represents the payload size, and a single byte flagging the compression algorithm. Both request and response use this header format.
 ::html::
 </section>
 <section id="Cycle">
 ::html::
 ## Cycle
-The engine is essentially, a state manager that operate in cycles. Each one updates the clients it keeps, processing requests and responses at the socket level. A client can be in 11 different states, which are: *<a href="#NonExistent">NonExistent</a>, <a href="#Idle">Idle</a>, <a href="#HeadersReading">Headers Reading</a>, <a href="#Reading">Reading</a>, <a href="#Finished-Reading">Finished reading</a>, <a href="#Available">Available</a>, <a href="#Processing">Processing</a>, <a href="#Ready">Ready</a>, <a href="#WritingSock">Writing Sock</a>, <a href="#Kill">Kill</a>,* and *<a href="#Finished-Writing">Finished Writing</a>*.
+The engine is essentially a state manager that operates in cycles. Each one updates the clients it keeps, processing requests and responses at the socket level. A client can be in 11 different states, which are: *<a href="#NonExistent">NonExistent</a>, <a href="#Idle">Idle</a>, <a href="#HeadersReading">Headers Reading</a>, <a href="#Reading">Reading</a>, <a href="#Finished-Reading">Finished reading</a>, <a href="#Available">Available</a>, <a href="#Processing">Processing</a>, <a href="#Ready">Ready</a>, <a href="#WritingSock">Writing Sock</a>, <a href="#Kill">Kill</a>,* and *<a href="#Finished-Writing">Finished Writing</a>*.
 ::html::
 </section>
 <section id="NonExistent">
 ::html::
 ### NonExistent
-This state is given to a client that is just allocated, has no socket binded to it, basically a spot for addressing a new connection. Every client, after getting the state <a href="#Kill">*Kill*</a> is stated as such.
+This state is given to a client that is just allocated, has no socket bound to it, basically a spot for addressing a new connection. Every client, after getting the state <a href="#Kill">*Kill*</a> is stated as such.
 ::html::
 </section>
 <section id="Idle">
 ::html::
 ### Idle
-Describes a connection which is openned, but with no processing being done from it. If a connection remains the state for more than the magic number of 1200 seconds (20 minutes), it gets the state <a href="#Kill">*Kill*</a>.
+Describes a connection that is opened, but with no processing being done from it. If a connection remains in the state for more than the magic number of 1200 seconds (20 minutes), it gets the state <a href="#Kill">*Kill*</a>.
 ::html::
 </section>
 <section id="HeadersReading">
 ::html::
 ### Headers reading
-To check whether a connection made a request or not, it is set to this state (`Finished_H` internally). If bytes equal to the request method size get readen from that client socket, it is set to the state <a href="#Reading">Reading</a>, <a href="#Idle">Idle</a> otherwise.
+To check whether a connection made a request or not, it is set to this state (`Finished_H` internally). If bytes equal to the request method size get read from that client socket, it is set to the state <a href="#Reading">Reading</a>, <a href="#Idle">Idle</a> otherwise.
 ::html::
 </section>
 <section id="Reading">
 ::html::
 ### Reading
-A state that is given to the client that successfully get a request, and have its headers readen. It request to read from the socket, the byte count set in the headers. To guarantee all bytes will be readen, the connection is set to the state <a href="#Finished-Reading">Finished reading</a>.
+A state that is given to the client that successfully gets a request, and has its headers read. It requests to read from the socket the byte count set in the headers. To guarantee all bytes will be read, the connection is set to the state <a href="#Finished-Reading">Finished reading</a>.
 ::html::
 </section>
 <section id="Finished-Reading">
 ::html::
 ### Finished reading
-If the read from <a href="#Reading">Reading</a> fail to retrieve the expected count, the client is locked into this state until all bytes requested get readen. That said, the state read the socket until there are no bytes remaining to be readen, seting the client to <a href="#Available">Available</a> if so.
+If the read from <a href="#Reading">Reading</a> fails to retrieve the expected count, the client is locked into this state until all bytes requested are read. That said, the state reads the socket until there are no bytes remaining to be read, setting the client to <a href="#Available">Available</a> if so.
 ::html::
 </section>
 <section id="Available">
 ::html::
 ### Available
-As a client reach this state, the server handler in the rust end can request it and set it to <a href="#Processing">Processing</a>, get the request content, process it, embed a response, and send. As the response is linked to the client, its state is set to <a href="#Ready">Ready</a>.
+As a client reaches this state, the server handler in the Rust end can request it and set it to <a href="#Processing">Processing</a>, get the request content, process it, embed a response, and send. As the response is linked to the client, its state is set to <a href="#Ready">Ready</a>.
 ::html::
 </section>
 <section id="Processing">
@@ -279,25 +101,25 @@ A state that tells that the Rust end is computing this request.
 <section id="#Ready">
 ::html::
 ### Ready
-As a client has this state, the networker acknowledge it owns the client and can start the socket response writing process. Setting the state to <a href="#WritingSock">Writing Sock</a>.
+As a client has this state, the networker acknowledges that it owns the client and can start the socket response writing process. Setting the state to <a href="#WritingSock">Writing Sock</a>.
 ::html::
 </section>
 <section id="WritingSock">
 ::html::
 ### Writing sock
-The write version of <a href="#Reading">Reading</a>, tries to write, setting it on a state to rewrite in case not all bytes get written at once. The <a href="#FinishedWriting">Finished writing</a> state.
+The write version of <a href="#Reading">Reading</a>, tries to write, setting it in a state to rewrite in case not all bytes get written at once. The <a href="#FinishedWriting">Finished writing</a> state.
 ::html::
 </section>
 <section id="FinishedWriting">
 ::html::
 ### Finished writing
-Rewrite remaining bytes, until none has left to be written. As all get written, the cycle rollback, state being set to <a href="#Idle">Idle</a>.
+Rewrite remaining bytes until none are left to be written. As all get written, the cycle rollback, state being set to <a href="#Idle">Idle</a>.
 ::html::
 </section>
 <section id="Kill">
 ::html::
 ### Kill
-In cases of malfunction, the client is killed, related buffers and file descriptors are freed/closed. The state being set back to <a href="#NonExistent">NonExistent</a>.
+In cases of malfunction, the client is killed, and related buffers and file descriptors are freed/closed. The state is set back to <a href="#NonExistent">NonExistent</a>.
 ::html::
 </section>
 <section id="Rust-Networker-Implementation">
@@ -328,5 +150,67 @@ Methods `cycle()` and `get_client()` panic if called on an uninitialized `Networ
 This structure wraps C FFI calls and manages raw pointers. Safety is maintained through state management and the internal mutex.
 ::html::
 </section>
-</main>
+<section id="Client">
 ::html::
+# Client
+The client implementation is pretty straightforward. Just a structure that holds sockets, in a pool, and you can hold it globally and use it across threads safely. On sending, it passes the blob input into a pipeline. Which either <a href="#compress">compress</a>, <a href="#encryption">encrypt</a>, or both. It depends on the selected features.
+# Pipelines
+Process that computes over the input before sending data to the network, based on the entered <a href="#features">features</a>. In code, there are `pipeline_read` and `pipeline_write`, where the difference is simply the order of operations. The read pipe for decrypting and decompressing, the write pipe for compressing and encrypting.
+::html::
+</section>
+<section id="encryption">
+::html::
+# Encryption
+FalcoTCP uses AES-256-GCM. If you append the <a href="#feature-encryption">encryption</a> feature, it will encrypt/decrypt data. 
+::html::
+</section>
+<section id="compress">
+::html::
+# Compression
+There are four options: LZMA, LZ4, ZSTD, and GZIP. You pick one yourself if the <a href="#heuristics">heuristics</a> feature is absent. Otherwise, the program picks one based on the packet size, and <a href="#heuristics-bias">heuristics-bias</a>. 
+::html::
+</section>
+<section href="heuristics">
+::html::
+# Heuristics
+In this case, heuristics are used to pick which compression algorithm will be used depending on the package size. Since there are four algorithms, and some (LZMA, especially) might be very slow, there is a "bias" you can apply to the heuristics, which are the heuristic-bias.
+::html::
+</section>
+<section id="heuristics-bias">
+::html::
+## Heuristic bias
+### Performance
+Always picks LZ compression, falling back to other algorithms (in the same sequence) if not available: ZSTD, and GZIP. 
+### Ratio
+Pick up a different algorithm based on size and availability. At 10MiB or less, it will pick LZMA, falling back to GZIP, ZSTD, or LZ4. If between 10Mib and 200Mib, it will pick GZIP, falling back to ZSTD, or LZ4. If within the range of 200Mib and 300Mib, ZSTD will be picked, falling to GZIP if not available. If 300Mib+, LZ4 will always be picked.
+### Balance
+If below 10MiB, it will pick LZMA, falling back to ZSTD, GZIP, or LZ4, depending on availability. In the range of 10MiB to 200MiB, GZIP, ZSTD, or LZ4 will be picked. Between 200MiB and 300MiB, either GZIP or ZSTD will be picked. If the packet size is higher than 300MiB, LZ4 is selected. 
+::html::
+</section>
+<section id="features">
+::html::
+# <a href="https://doc.rust-lang.org/cargo/reference/features.html">Features</a>
+- **heuristics**: Add heuristics to the compression algorithm selection.
+- **heubias-performance**: Set the heuristics to drive towards performance.
+- **heubias-ratio**: Make heuristics pick what has the highest coherent compression ratio.
+- **heubias-balance**: Makes heuristics balance between performance and ratio, picked by default if no bias is selected.
+- **complete-compression**: Include all four compression algorithms (LZ4, ZSTD, GZIP, and LZMA). I would recommend this for servers.
+- **tokio-runtime**: Makes it use the asynchronous tokio runtime.
+- **client**: Include the client handling primitives.
+- **server**: Include the server handling primitives.
+- **falco-client**: Include the FalcoTCP client side integration (pipelines et cetra).
+- **falco-server**: Also include the FalcoTCP integration, but with server-side only.
+- **LZMA**: Include LZMA
+- **LZ4**: Include LZ4
+- **GZIP**: Include GZIP
+- **ZSTD**: Include ZSTD
+- **dynamic-io-uring-link**: Changes the compilation process, including liburing dynamically instead of the default (static).
+- **dev-redundancies**: Include quirks I thought that could be useful, or help with efficiency, yet have trade-offs that can make the balance shift to more inefficiency later, depending on the project's use. Mostly `shrink_to_fit`, everywhere I think someone might leave some capacity idle. That said, it allows me to put more of "me" (whatever it means) into the codebase.
+::html::
+</section>
+</main>
+<footer style="text-align:center;">
+:)
+</footer>
+::html::
+
