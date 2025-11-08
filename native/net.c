@@ -243,6 +243,7 @@ int proc(Networker* self){
                 continue;
             }
             sqe->user_data = OP_Read;
+            self->clients[i].state = Finished_H;
             io_uring_prep_read(sqe,self->clients[i].sock, (unsigned char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, MESSAGE_HEADERS_SIZE-self->clients[i].recv_offset, 0);
             REGISTER;
             continue;
@@ -251,14 +252,16 @@ int proc(Networker* self){
         if(self->clients[i].state == Finished_H){
             if(self->clients[i].recv_offset == MESSAGE_HEADERS_SIZE){
                 self->clients[i].recv_offset = 0;
-                unsigned char buffer [MESSAGE_HEADERS_SIZE];
-                memcpy(buffer, &self->clients[i].req_headers, MESSAGE_HEADERS_SIZE);
-                deserialize_message_headers(buffer, &self->clients[i].req_headers);
+                deserialize_message_headers((const uint8_t*)&self->clients[i].req_headers, 
+                            &self->clients[i].req_headers); 
                 self->clients[i].state = Reading;
             }else{
+                if(self->clients[i].recv_offset == 0){
+                    self->clients[i].state = Idle;
+                    continue;
+                }
                 struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
                 sqe->user_data = OP_Read;
-                self->clients[i].state = Finished_H;
                 io_uring_prep_read(sqe,self->clients[i].sock, (unsigned char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, MESSAGE_HEADERS_SIZE-self->clients[i].recv_offset, 0);
                 REGISTER;
                 continue;
@@ -354,33 +357,31 @@ int proc(Networker* self){
         }
 
         int what = cqe->user_data;
-        if (what == OP_Read) {
-            self->clients[ptr].recv_offset += res;
-            int cond = (self->clients[ptr].state == Idle);
-            int mask = -cond;  
-            self->clients[ptr].state = self->clients[ptr].state ^ ((self->clients[ptr].state ^ Finished_H) & mask);
-            continue;
-        } 
-        if(what == OP_Write){
-            self->clients[ptr].writev_offset += res;
-            continue;
-        }
-        if(what == OP_SocketAcc){
-            u64 saved_id = self->clients[ptr].id;
-            memset(&self->clients[ptr], 0, sizeof(Client));
-            self->clients[ptr].sock = res;
-            int flag = 1;
-            setsockopt(self->clients[ptr].sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)); 
-            #if __tls__
-                self->clients[ptr].state = TlsHandshake;
-            #else
-                self->clients[ptr].state = Idle;
-            #endif
-            self->clients[ptr].activity = now;
-            self->clients[ptr].id = saved_id;
-            fcntl(self->clients[ptr].sock, F_SETFL, O_NONBLOCK);
-            
-            continue;
+        switch(what){
+            case OP_Read:
+                self->clients[ptr].recv_offset += res;
+                break;
+            case OP_Write:
+                self->clients[ptr].writev_offset += res;
+                break;
+            case OP_SocketAcc:
+                {
+                u64 saved_id = self->clients[ptr].id;
+                memset(&self->clients[ptr], 0, sizeof(Client));
+                self->clients[ptr].sock = res;
+                int flag = 1;
+                setsockopt(self->clients[ptr].sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)); 
+                #if __tls__
+                    self->clients[ptr].state = TlsHandshake;
+                #else
+                    self->clients[ptr].state = Idle;
+                #endif
+                self->clients[ptr].activity = now;
+                self->clients[ptr].id = saved_id;
+                fcntl(self->clients[ptr].sock, F_SETFL, O_NONBLOCK);
+                }
+                break;
+            default: break;
         }
     }
 
