@@ -66,7 +66,7 @@ int tls_setup(Networker* self, const char* cert_file, const char* key_file) {
 
     long opts = SSL_OP_IGNORE_UNEXPECTED_EOF | 
                 SSL_OP_NO_RENEGOTIATION | 
-                SSL_OP_SERVER_PREFERENCE |
+                SSL_OP_CIPHER_SERVER_PREFERENCE |
                 SSL_OP_ENABLE_KTLS;
     SSL_CTX_set_options(self->ssl_ctx, opts);
 
