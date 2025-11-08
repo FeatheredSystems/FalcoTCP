@@ -20,6 +20,10 @@ pub struct FalcoClient {
     pub pool: Arc<RwLock<Vec<Arc<Mutex<Client>>>>>,
     target: (SocketAddr, (Duration, Duration, Duration)),
     clock: Instant,
+
+    #[cfg(feature = "tls")]
+    domain: String,
+
     retry: bool,
 }
 
@@ -104,11 +108,15 @@ impl FalcoClient {
         parameters: Var,
         socket: &SocketAddr,
         timeout: (Duration, Duration, Duration),
+        #[cfg(feature = "tls")] domain: &str,
+
         retry: bool,
     ) -> Result<Self, Error> {
         let mut v = Vec::with_capacity(clients);
         for _ in 0..clients {
-            v.push(Arc::new(Mutex::new(Client::new(timeout.2, socket).await?)));
+            v.push(Arc::new(Mutex::new(
+                Client::new(timeout.2, socket, domain).await?,
+            )));
         }
         #[cfg(feature = "dev-redundancies")]
         v.shrink_to_fit(); // redundant
@@ -118,6 +126,7 @@ impl FalcoClient {
             target: (*socket, timeout),
             clock: Instant::now(),
             retry,
+            domain: domain.to_string(),
         })
     }
     pub async fn request(&self, input: Vec<u8>, prevent_mitigate: bool) -> Result<Vec<u8>, Error> {
@@ -172,7 +181,7 @@ impl FalcoClient {
             pool.push(Arc::new(Mutex::new(
                 timeout(
                     self.target.1.2,
-                    Client::new(self.target.1.2, &self.target.0.clone()),
+                    Client::new(self.target.1.2, &self.target.0.clone(), &self.domain),
                 )
                 .await??,
             )));

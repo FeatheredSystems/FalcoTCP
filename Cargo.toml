@@ -15,7 +15,7 @@ cc = "1.2.41"
 log = "0.4.28"
 
 [features]
-default = ["tokio-tls","client"]
+default = ["tokio-tls","server","falco-client","client","falco-server"]
 heubias-performance = []
 heubias-balance = []
 heubias-ratio = []

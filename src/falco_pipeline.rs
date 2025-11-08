@@ -132,7 +132,7 @@ pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Er
 }
 
 #[inline]
-pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result<Vec<u8>, Error> {
+pub fn pipeline_receive(compr_alg: u8, input: Vec<u8>, _var: &Var) -> Result<Vec<u8>, Error> {
     let compression: CompressionAlgorithm = compr_alg.into();
 
     #[cfg(feature = "encryption")]
