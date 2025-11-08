@@ -243,8 +243,7 @@ int proc(Networker* self){
                 continue;
             }
             sqe->user_data = OP_Read;
-            self->clients[i].state = Finished_H;
-            io_uring_prep_read(sqe,self->clients[i].sock, (char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, MESSAGE_HEADERS_SIZE-self->clients[i].recv_offset, 0);
+            io_uring_prep_read(sqe,self->clients[i].sock, (unsigned char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, MESSAGE_HEADERS_SIZE-self->clients[i].recv_offset, 0);
             REGISTER;
             continue;
         }
@@ -257,7 +256,11 @@ int proc(Networker* self){
                 deserialize_message_headers(buffer, &self->clients[i].req_headers);
                 self->clients[i].state = Reading;
             }else{
-                self->clients[i].state = Idle;
+                struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
+                sqe->user_data = OP_Read;
+                self->clients[i].state = Finished_H;
+                io_uring_prep_read(sqe,self->clients[i].sock, (unsigned char*)(&self->clients[i].req_headers)+self->clients[i].recv_offset, MESSAGE_HEADERS_SIZE-self->clients[i].recv_offset, 0);
+                REGISTER;
                 continue;
             }
         }
@@ -351,10 +354,13 @@ int proc(Networker* self){
         }
 
         int what = cqe->user_data;
-        if(what == OP_Read){
+        if (what == OP_Read) {
             self->clients[ptr].recv_offset += res;
+            int cond = (self->clients[ptr].state == Idle);
+            int mask = -cond;  
+            self->clients[ptr].state = self->clients[ptr].state ^ ((self->clients[ptr].state ^ Finished_H) & mask);
             continue;
-        }
+        } 
         if(what == OP_Write){
             self->clients[ptr].writev_offset += res;
             continue;
