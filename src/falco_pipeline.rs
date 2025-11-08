@@ -132,6 +132,7 @@ pub fn pipeline_send(mut input: Vec<u8>, _var: &Var) -> Result<(u8, Vec<u8>), Er
 }
 
 #[inline]
+#[allow(unused_mut)]
 pub fn pipeline_receive(compr_alg: u8, mut input: Vec<u8>, _var: &Var) -> Result<Vec<u8>, Error> {
     let compression: CompressionAlgorithm = compr_alg.into();
 
