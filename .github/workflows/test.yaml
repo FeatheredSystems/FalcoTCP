@@ -6,8 +6,23 @@ on:
   pull_request:
     branches: [ main, master, develop ]
 
+env:
+  DISCORD_WEBHOOK_URL: ${{ secrets.CI_DISCORD_WEBHOOK }}
+
 jobs:
+  notify-start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send initial Discord notification
+        run: |
+          TIMESTAMP=$(date -u '+%H:%M:%S %Y/%m/%d')
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"content\": \"# $TIMESTAMP CI\"}" \
+               ${{ env.DISCORD_WEBHOOK_URL }}
+
   test:
+    needs: notify-start
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -76,9 +91,36 @@ jobs:
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests - ${{ matrix.features.name }}
-        run: cargo test ${{ matrix.features.flags }} --lib
+        id: test
+        continue-on-error: true
+        run: |
+          cargo test ${{ matrix.features.flags }} --lib > test_output.txt 2>&1
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Send Discord notification
+        if: always()
+        run: |
+          TEST_OUTPUT=$(cat test_output.txt | head -c 4000 | jq -Rs .)
+          if [ "${{ steps.test.outputs.exit_code }}" = "0" ]; then
+            COLOR=3066993
+            STATUS="✅ Success"
+          else
+            COLOR=15158332
+            STATUS="❌ Failed"
+          fi
+          
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"embeds\": [{\"title\": \"$STATUS: ${{ matrix.features.name }}\", \"description\": $TEST_OUTPUT, \"color\": $COLOR, \"footer\": {\"text\": \"Commit: ${{ github.sha }}\"}}]}" \
+               ${{ env.DISCORD_WEBHOOK_URL }}
+
+      - name: Fail job if tests failed
+        if: steps.test.outputs.exit_code != '0'
+        run: exit 1
 
   check:
+    needs: notify-start
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -93,11 +135,36 @@ jobs:
           toolchain: stable
 
       - name: Check all feature combinations compile
+        id: check
+        continue-on-error: true
         run: |
-          cargo check --all-features
-          cargo check --no-default-features
+          cargo check --all-features > check_output.txt 2>&1
+          cargo check --no-default-features >> check_output.txt 2>&1
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Send Discord notification
+        if: always()
+        run: |
+          CHECK_OUTPUT=$(cat check_output.txt | head -c 4000 | jq -Rs .)
+          if [ "${{ steps.check.outputs.exit_code }}" = "0" ]; then
+            COLOR=3066993
+            STATUS="✅ Success"
+          else
+            COLOR=15158332
+            STATUS="❌ Failed"
+          fi
+          
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"embeds\": [{\"title\": \"$STATUS: Feature Compilation Check\", \"description\": $CHECK_OUTPUT, \"color\": $COLOR}]}" \
+               ${{ env.DISCORD_WEBHOOK_URL }}
+
+      - name: Fail job if check failed
+        if: steps.check.outputs.exit_code != '0'
+        run: exit 1
 
   clippy:
+    needs: notify-start
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -113,9 +180,35 @@ jobs:
           components: clippy
 
       - name: Run clippy
-        run: cargo clippy --all-features -- -D warnings
+        id: clippy
+        continue-on-error: true
+        run: |
+          cargo clippy --all-features -- -D warnings > clippy_output.txt 2>&1
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Send Discord notification
+        if: always()
+        run: |
+          CLIPPY_OUTPUT=$(cat clippy_output.txt | head -c 4000 | jq -Rs .)
+          if [ "${{ steps.clippy.outputs.exit_code }}" = "0" ]; then
+            COLOR=3066993
+            STATUS="✅ Success"
+          else
+            COLOR=15158332
+            STATUS="❌ Failed"
+          fi
+          
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"embeds\": [{\"title\": \"$STATUS: Clippy\", \"description\": $CLIPPY_OUTPUT, \"color\": $COLOR}]}" \
+               ${{ env.DISCORD_WEBHOOK_URL }}
+
+      - name: Fail job if clippy failed
+        if: steps.clippy.outputs.exit_code != '0'
+        run: exit 1
 
   fmt:
+    needs: notify-start
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -128,4 +221,29 @@ jobs:
           components: rustfmt
 
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        id: fmt
+        continue-on-error: true
+        run: |
+          cargo fmt --all -- --check > fmt_output.txt 2>&1
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Send Discord notification
+        if: always()
+        run: |
+          FMT_OUTPUT=$(cat fmt_output.txt | head -c 4000 | jq -Rs .)
+          if [ "${{ steps.fmt.outputs.exit_code }}" = "0" ]; then
+            COLOR=3066993
+            STATUS="✅ Success"
+          else
+            COLOR=15158332
+            STATUS="❌ Failed"
+          fi
+          
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{\"embeds\": [{\"title\": \"$STATUS: Formatting\", \"description\": $FMT_OUTPUT, \"color\": $COLOR}]}" \
+               ${{ env.DISCORD_WEBHOOK_URL }}
+
+      - name: Fail job if fmt failed
+        if: steps.fmt.outputs.exit_code != '0'
+        run: exit 1
