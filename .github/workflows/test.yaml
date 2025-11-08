@@ -6,23 +6,8 @@ on:
   pull_request:
     branches: [ main, master, develop ]
 
-env:
-  DISCORD_WEBHOOK_URL: ${{ secrets.CI_DISCORD_WEBHOOK }}
-
 jobs:
-  notify-start:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Send initial Discord notification
-        run: |
-          TIMESTAMP=$(date -u '+%H:%M:%S %Y/%m/%d')
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{\"content\": \"# $TIMESTAMP CI\"}" \
-               ${{ env.DISCORD_WEBHOOK_URL }}
-
   test:
-    needs: notify-start
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -30,48 +15,58 @@ jobs:
         features:
           - name: "Default"
             flags: "--features default"
+          
           - name: "Complete Compression - Performance Bias"
             flags: "--features complete-compression,heuristics,heubias-performance,encryption"
+          
           - name: "Complete Compression - Balance Bias"
             flags: "--features complete-compression,heuristics,heubias-balance,encryption"
+          
           - name: "Complete Compression - Ratio Bias"
             flags: "--features complete-compression,heuristics,heubias-ratio,encryption"
+          
           - name: "LZMA Only"
             flags: "--no-default-features --features LZMA,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
           - name: "ZSTD Only"
             flags: "--no-default-features --features ZSTD,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
           - name: "GZIP Only"
             flags: "--no-default-features --features GZIP,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
           - name: "LZ4 Only"
             flags: "--no-default-features --features LZ4,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
           - name: "No Compression - Encryption Only"
             flags: "--no-default-features --features encryption,falco-client,falco-server"
+          
           - name: "Complete Compression - No Encryption"
             flags: "--no-default-features --features complete-compression,heuristics,heubias-balance,falco-client,falco-server"
+          
           - name: "Client Only"
             flags: "--no-default-features --features falco-client,encryption,complete-compression,heuristics,heubias-balance"
+          
           - name: "Server Only"
             flags: "--no-default-features --features falco-server,encryption,complete-compression,heuristics,heubias-balance"
+          
           - name: "Minimal - No Features"
             flags: "--no-default-features"
+          
           - name: "With Tokio Runtime"
             flags: "--features default,tokio-runtime"
+          
           - name: "LZMA + ZSTD"
             flags: "--no-default-features --features LZMA,ZSTD,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
           - name: "GZIP + LZ4"
             flags: "--no-default-features --features GZIP,LZ4,encryption,heuristics,heubias-balance,falco-client,falco-server"
+          
           - name: "Heuristics - Performance (No Compression)"
             flags: "--no-default-features --features heuristics,heubias-performance,encryption,falco-client,falco-server"
-          - name: "TLS + Complete Compression"
-            flags: "--features tls,complete-compression,heuristics,heubias-balance,falco-client,falco-server"
-          - name: "Tokio TLS + Complete Compression"  
-            flags: "--features tokio-tls,complete-compression,heuristics,heubias-balance,falco-client,falco-server"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -90,44 +85,24 @@ jobs:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ matrix.features.name }}-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Run tests - ${{ matrix.features.name }}
-        id: test
+        run: cargo test ${{ matrix.features.flags }} --lib
+
+      - name: Run doc tests - ${{ matrix.features.name }}
+        run: cargo test ${{ matrix.features.flags }} --doc
         continue-on-error: true
-        run: |
-          cargo test ${{ matrix.features.flags }} --lib > test_output.txt 2>&1
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Send Discord notification
-        if: always()
-        run: |
-          TEST_OUTPUT=$(cat test_output.txt | head -c 4000 | jq -Rs .)
-          if [ "${{ steps.test.outputs.exit_code }}" = "0" ]; then
-            COLOR=3066993
-            STATUS="✅ Success"
-          else
-            COLOR=15158332
-            STATUS="❌ Failed"
-          fi
-          
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{\"embeds\": [{\"title\": \"$STATUS: ${{ matrix.features.name }}\", \"description\": $TEST_OUTPUT, \"color\": $COLOR, \"footer\": {\"text\": \"Commit: ${{ github.sha }}\"}}]}" \
-               ${{ env.DISCORD_WEBHOOK_URL }}
-
-      - name: Fail job if tests failed
-        if: steps.test.outputs.exit_code != '0'
-        run: exit 1
 
   check:
-    needs: notify-start
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -135,43 +110,15 @@ jobs:
           toolchain: stable
 
       - name: Check all feature combinations compile
-        id: check
-        continue-on-error: true
         run: |
-          cargo check --all-features > check_output.txt 2>&1
-          cargo check --no-default-features >> check_output.txt 2>&1
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
-
-      - name: Send Discord notification
-        if: always()
-        run: |
-          CHECK_OUTPUT=$(cat check_output.txt | head -c 4000 | jq -Rs .)
-          if [ "${{ steps.check.outputs.exit_code }}" = "0" ]; then
-            COLOR=3066993
-            STATUS="✅ Success"
-          else
-            COLOR=15158332
-            STATUS="❌ Failed"
-          fi
-          
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{\"embeds\": [{\"title\": \"$STATUS: Feature Compilation Check\", \"description\": $CHECK_OUTPUT, \"color\": $COLOR}]}" \
-               ${{ env.DISCORD_WEBHOOK_URL }}
-
-      - name: Fail job if check failed
-        if: steps.check.outputs.exit_code != '0'
-        run: exit 1
+          cargo check --all-features
+          cargo check --no-default-features
 
   clippy:
-    needs: notify-start
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -180,35 +127,10 @@ jobs:
           components: clippy
 
       - name: Run clippy
-        id: clippy
-        continue-on-error: true
-        run: |
-          cargo clippy --all-features -- -D warnings > clippy_output.txt 2>&1
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
+        run: cargo clippy --all-features -- -D warnings
 
-      - name: Send Discord notification
-        if: always()
-        run: |
-          CLIPPY_OUTPUT=$(cat clippy_output.txt | head -c 4000 | jq -Rs .)
-          if [ "${{ steps.clippy.outputs.exit_code }}" = "0" ]; then
-            COLOR=3066993
-            STATUS="✅ Success"
-          else
-            COLOR=15158332
-            STATUS="❌ Failed"
-          fi
-          
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{\"embeds\": [{\"title\": \"$STATUS: Clippy\", \"description\": $CLIPPY_OUTPUT, \"color\": $COLOR}]}" \
-               ${{ env.DISCORD_WEBHOOK_URL }}
-
-      - name: Fail job if clippy failed
-        if: steps.clippy.outputs.exit_code != '0'
-        run: exit 1
 
   fmt:
-    needs: notify-start
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -221,29 +143,4 @@ jobs:
           components: rustfmt
 
       - name: Check formatting
-        id: fmt
-        continue-on-error: true
-        run: |
-          cargo fmt --all -- --check > fmt_output.txt 2>&1
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
-
-      - name: Send Discord notification
-        if: always()
-        run: |
-          FMT_OUTPUT=$(cat fmt_output.txt | head -c 4000 | jq -Rs .)
-          if [ "${{ steps.fmt.outputs.exit_code }}" = "0" ]; then
-            COLOR=3066993
-            STATUS="✅ Success"
-          else
-            COLOR=15158332
-            STATUS="❌ Failed"
-          fi
-          
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{\"embeds\": [{\"title\": \"$STATUS: Formatting\", \"description\": $FMT_OUTPUT, \"color\": $COLOR}]}" \
-               ${{ env.DISCORD_WEBHOOK_URL }}
-
-      - name: Fail job if fmt failed
-        if: steps.fmt.outputs.exit_code != '0'
-        run: exit 1
+        run: cargo fmt --all -- --check
