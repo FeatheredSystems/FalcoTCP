@@ -76,7 +76,7 @@ jobs:
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests - ${{ matrix.features.name }}
-        run: time cargo test ${{ matrix.features.flags }} --lib
+        run: cargo test ${{ matrix.features.flags }} --lib
 
         continue-on-error: true
 
