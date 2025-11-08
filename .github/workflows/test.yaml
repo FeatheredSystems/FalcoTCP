@@ -78,16 +78,14 @@ jobs:
       - name: Run tests - ${{ matrix.features.name }}
         run: cargo test ${{ matrix.features.flags }} --lib
 
-        continue-on-error: true
-
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Install liburing-dev
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev
-
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -105,8 +103,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install liburing-dev
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -123,9 +121,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install liburing-dev
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev
-
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -134,4 +129,3 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
-
