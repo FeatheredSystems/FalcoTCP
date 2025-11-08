@@ -1,6 +1,10 @@
 #ifndef NETWORKER_H
 #define NETWORKER_H
 
+
+#if __tls__
+#include <openssl/crypto.h>
+#endif
 #include <stddef.h>
 #include <stdint.h>
 #include <liburing.h>
@@ -12,6 +16,9 @@ typedef size_t usize;
 
 // Client states
 enum State {
+    #if __tls__
+    TlsHandshake = -1,
+    #endif
     NonExistent = 0,
     Idle = 1,
     HeadersReaden = 2,
@@ -33,6 +40,7 @@ typedef struct {
 } MessageHeaders;
 
 // Client structure
+
 typedef struct {
     int sock;
     unsigned char* request;
@@ -45,6 +53,10 @@ typedef struct {
     int state;
     u64 activity;
     u64 capacity;
+    #if __tls__
+    SSL *ssl;
+    unsigned int ktls; // MSB -> RECV TLS enabled | LSB -> KTLS SEND enabled 
+    #endif
 } Client;
 
 // Compression algorithms
@@ -70,6 +82,10 @@ struct NetworkerSettings {
     unsigned short port;
     unsigned short max_queue;
     unsigned short max_clients;
+    #if __tls__
+    char* cert_file;
+    char* key_file;
+    #endif
 };
 
 // Networker main structure
@@ -80,6 +96,9 @@ typedef struct {
     Client* clients;
     struct io_uring *ring;
     u64* author_log;
+    #if __tls__
+    SSL_CTX *ssl_ctx;
+    #endif
 } Networker;
 
 // Rust helper struct

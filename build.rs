@@ -10,9 +10,12 @@ fn main() {
             let mut build = cc::Build::new();
             build.file("native/net.c").include("native");
 
-            let profile = std::env::var("PROFILE").unwrap_or_default();
-            if profile == "release" {
-                build.flag("-O3");
+            build.flag("-O3");
+            #[cfg(feature = "tls")]
+            {
+                build.flag("-D__tls__=1");
+                println!("cargo:rustc-link-lib=static=ssl");
+                println!("cargo:rustc-link-lib=static=crypto");
             }
 
             #[cfg(not(feature = "dynamic-uring-link"))]

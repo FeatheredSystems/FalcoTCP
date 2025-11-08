@@ -2,6 +2,7 @@
 #include <asm-generic/errno.h>
 #include <bits/types.h>
 #include <errno.h>
+#include <openssl/crypto.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <liburing/io_uring.h>
@@ -16,9 +17,14 @@
 #include "numbers.h"
 #include <liburing.h>
 #include "net.h"
+#include <netinet/tcp.h>
+
+#if __tls__
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#endif
 
 #define sfree(p) do { free(p); (p) = NULL; } while(0)
-
 #define MESSAGE_HEADERS_SIZE 9
 
 
@@ -43,6 +49,54 @@ static inline void deserialize_message_headers(const uint8_t *buf, MessageHeader
     }
     msg->compr_alg = buf[8];
 }
+#if __tls__
+int tls_setup(Networker* self, const char* cert_file, const char* key_file) {
+    
+    self->ssl_ctx = SSL_CTX_new(TLS_server_method());
+    if (self->ssl_ctx == NULL) {
+        ERR_print_errors_fp(stderr);
+        return -1;
+    }
+
+    if (!SSL_CTX_set_min_proto_version(self->ssl_ctx, TLS1_2_VERSION)) {
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(self->ssl_ctx);
+        return -1;
+    }
+
+    long opts = SSL_OP_IGNORE_UNEXPECTED_EOF | 
+                SSL_OP_NO_RENEGOTIATION | 
+                SSL_OP_SERVER_PREFERENCE |
+                SSL_OP_ENABLE_KTLS;
+    SSL_CTX_set_options(self->ssl_ctx, opts);
+
+    if (SSL_CTX_use_certificate_chain_file(self->ssl_ctx, cert_file) <= 0) {
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(self->ssl_ctx);
+        return -1;
+    }
+
+    if (SSL_CTX_use_PrivateKey_file(self->ssl_ctx, key_file, SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        SSL_CTX_free(self->ssl_ctx);
+        return -1;
+    }
+
+    SSL_CTX_set_min_proto_version(self->ssl_ctx, TLS1_3_VERSION);
+    SSL_CTX_set_max_proto_version(self->ssl_ctx, TLS1_3_VERSION);
+
+    unsigned char cache_id[] = "cache";
+    SSL_CTX_set_session_id_context(self->ssl_ctx, cache_id, sizeof(cache_id));
+    SSL_CTX_set_session_cache_mode(self->ssl_ctx, SSL_SESS_CACHE_SERVER);
+    SSL_CTX_sess_set_cache_size(self->ssl_ctx, 1024);
+    SSL_CTX_set_timeout(self->ssl_ctx, 3600);
+
+    SSL_CTX_set_verify(self->ssl_ctx, SSL_VERIFY_NONE, NULL);
+
+    return 0;
+}
+#endif
+
 int start(Networker* self, struct NetworkerSettings* s){
     struct NetworkerSettings settings = *s;
     if (self->initiated > 0){
@@ -104,9 +158,20 @@ int start(Networker* self, struct NetworkerSettings* s){
             return res;
         }
     }
+    #if __tls__
+    if (tls_setup(self, s->cert_file, s->key_file) < 0) {
+        free(self->author_log);
+        free(self->clients);
+        free(self->ring);
+        close(sock);
+        return -1;
+    }
+    #endif
+
 
     return 0;
 }
+
 
 int proc(Networker* self){
     #define ring *self->ring
@@ -130,7 +195,43 @@ int proc(Networker* self){
             sqe->user_data = OP_SocketAcc;
             REGISTER; 
             continue;
-        }        
+        }       
+
+        #if __tls__
+        
+        if(self->clients[i].state == TlsHandshake){
+            if (self->clients[i].ssl == NULL) {
+                self->clients[i].ssl = SSL_new(self->ssl_ctx);
+                if (self->clients[i].ssl == NULL) {
+                    ERR_print_errors_fp(stderr);
+                    self->clients[i].state = Kill;
+                    continue;
+                }
+        
+                SSL_set_fd(self->clients[i].ssl, self->clients[i].sock);
+            }
+    
+            // Perform SSL handshake
+            int handshake_result = SSL_accept(self->clients[i].ssl);
+    
+            if (handshake_result <= 0) {
+                self->clients[i].state = Kill;     
+                continue;
+            }
+    
+    
+            if (BIO_get_ktls_send(SSL_get_wbio(self->clients[i].ssl)) && BIO_get_ktls_recv(SSL_get_rbio(self->clients[i].ssl))) {
+                self->clients[i].ktls = 1;
+            } else {
+                self->clients[i].state = Kill;
+                continue;
+            }
+            self->clients[i].state = Idle;
+            continue; 
+        }
+
+        #endif
+        
         if(self->clients[i].state == Idle){
             struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
             if((now-self->clients[i].activity) > 1200){
@@ -211,6 +312,14 @@ int proc(Networker* self){
             continue;
         }
         if(self->clients[i].state == Kill){
+            #if __tls__
+            if (self->clients[i].ssl) {
+                SSL_shutdown(self->clients[i].ssl);
+                SSL_free(self->clients[i].ssl);
+                self->clients[i].ssl = NULL;
+                self->clients[i].ktls = 0;
+            }
+            #endif
             struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
             sqe->user_data = OP_Close;
             io_uring_prep_close(sqe, self->clients[i].sock);
@@ -242,11 +351,6 @@ int proc(Networker* self){
         }
 
         int what = cqe->user_data;
-        
-        if(cqe->res < 0){
-            continue;
-        }
-        
         if(what == OP_Read){
             self->clients[ptr].recv_offset += res;
             continue;
@@ -259,9 +363,17 @@ int proc(Networker* self){
             u64 saved_id = self->clients[ptr].id;
             memset(&self->clients[ptr], 0, sizeof(Client));
             self->clients[ptr].sock = res;
-            self->clients[ptr].state = Idle;
+            int flag = 1;
+            setsockopt(self->clients[ptr].sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)); 
+            #if __tls__
+                self->clients[ptr].state = TlsHandshake;
+            #else
+                self->clients[ptr].state = Idle;
+            #endif
             self->clients[ptr].activity = now;
             self->clients[ptr].id = saved_id;
+            fcntl(self->clients[ptr].sock, F_SETFL, O_NONBLOCK);
+            
             continue;
         }
     }

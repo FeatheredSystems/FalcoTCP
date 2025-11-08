@@ -62,12 +62,7 @@ fn get_mutex<T>(input: T) -> Mutex<T> {
 }
 
 impl Networker {
-    /// The "new" function creates and initialize a new "Networker" with the given settings
-    /// - Host: The IP where the networker will be listening to
-    /// - Port: The port
-    /// - Max_queue: The maximum count of sockets that can be left hanging before the server accepts it
-    /// - Max_clients: The count of clients that will be priorly allocated
-    pub fn new(host: &str, port: u16, max_queue: u16, max_clients: u16) -> Result<Self, Error> {
+    fn host_check(&self, host: &str) -> Result<[i8; 16], Error> {
         let host = host.replace("localhost", "127.0.0.1");
         let valid_host = host.parse::<Ipv4Addr>().is_ok();
         if !valid_host {
@@ -91,6 +86,48 @@ impl Networker {
                 );
             }
         }
+        Ok(raw_host)
+    }
+    /// The "new" function creates and initialize a new "Networker" with the given settings
+    /// - Host: The IP where the networker will be listening to
+    /// - Port: The port
+    /// - Max_queue: The maximum count of sockets that can be left hanging before the server accepts it
+    /// - Max_clients: The count of clients that will be priorly allocated
+    #[cfg(not(feature = "tls"))]
+    pub fn new(host: &str, port: u16, max_queue: u16, max_clients: u16) -> Result<Self, Error> {
+        let raw_net = self.host_check(host)?;
+        let c = if max_clients == 0 { 1 } else { max_clients };
+        let result = unsafe {
+            start(
+                &mut raw_net,
+                &mut NetworkerSettings {
+                    host: raw_host,
+                    port,
+                    max_queue,
+                    max_clients: c,
+                },
+            )
+        };
+        if result >= 0 {
+            return Ok(Networker {
+                primitive_self: raw_net,
+                mutex: get_mutex(()),
+                initilized: 1,
+            });
+        }
+        Err(Error::from_raw_os_error(result))
+    }
+
+    #[cfg(feature = "tls")]
+    pub fn new(
+        host: &str,
+        port: u16,
+        max_queue: u16,
+        max_clients: u16,
+        cert_file: &str,
+        key_file: &str,
+    ) -> Result<Self, Error> {
+        let raw_net = self.host_check(host)?;
         let c = if max_clients == 0 { 1 } else { max_clients };
         let result = unsafe {
             start(
@@ -379,6 +416,10 @@ pub struct NetworkerSettings {
     pub port: c_ushort,
     pub max_queue: c_ushort,
     pub max_clients: c_ushort,
+    #[cfg(feature = "tls")]
+    pub cert_file: *const c_char,
+    #[cfg(feature = "tls")]
+    pub key_file: *const c_char,
 }
 
 // Networker

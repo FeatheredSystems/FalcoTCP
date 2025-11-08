@@ -47,13 +47,16 @@ jobs:
             flags: "--no-default-features --features GZIP,LZ4,encryption,heuristics,heubias-balance,falco-client,falco-server"
           - name: "Heuristics - Performance (No Compression)"
             flags: "--no-default-features --features heuristics,heubias-performance,encryption,falco-client,falco-server"
-
+          - name: "TLS + Complete Compression"
+            flags: "--features tls,complete-compression,heuristics,heubias-balance,falco-client,falco-server"
+          - name: "Tokio TLS + Complete Compression"  
+            flags: "--features tokio-tls,complete-compression,heuristics,heubias-balance,falco-client,falco-server"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install liburing-dev
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev libssl-dev
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
