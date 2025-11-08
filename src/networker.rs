@@ -62,7 +62,7 @@ fn get_mutex<T>(input: T) -> Mutex<T> {
 }
 
 impl Networker {
-    fn host_check(&self, host: &str) -> Result<(RawNetworker, [i8; 16]), Error> {
+    fn host_check(host: &str) -> Result<(RawNetworker, [i8; 16]), Error> {
         let host = host.replace("localhost", "127.0.0.1");
         let valid_host = host.parse::<Ipv4Addr>().is_ok();
         if !valid_host {
@@ -95,64 +95,35 @@ impl Networker {
     /// - Max_clients: The count of clients that will be priorly allocated
     #[cfg(not(feature = "tls"))]
     pub fn new(
-        &self,
         host: &str,
         port: u16,
         max_queue: u16,
         max_clients: u16,
+        #[cfg(feature = "tls")] cert_file: &str,
+        #[cfg(feature = "tls")] key_file: &str,
     ) -> Result<Self, Error> {
-        let raw_host = self.host_check(host)?;
+        #[cfg(feature = "tls")]
+        use std::{ffi::CString, str::FromStr};
+        let (mut raw_host, raw_net) = Networker::host_check(host)?;
         let c = if max_clients == 0 { 1 } else { max_clients };
         let result = unsafe {
             start(
                 &mut raw_host,
                 &mut NetworkerSettings {
-                    host: raw_host,
+                    host: raw_net,
                     port,
                     max_queue,
                     max_clients: c,
-                },
-            )
-        };
-        if result >= 0 {
-            return Ok(Networker {
-                primitive_self: raw_host,
-                mutex: get_mutex(()),
-                initilized: 1,
-            });
-        }
-        Err(Error::from_raw_os_error(result))
-    }
-
-    #[cfg(feature = "tls")]
-    pub fn new(
-        &self,
-        host: &str,
-        port: u16,
-        max_queue: u16,
-        max_clients: u16,
-        cert_file: &str,
-        key_file: &str,
-    ) -> Result<Self, Error> {
-        let (mut raw_net, raw_host) = self.host_check(host)?;
-        let c = if max_clients == 0 { 1 } else { max_clients };
-        let result = unsafe {
-            use std::{ffi::CString, str::FromStr};
-            start(
-                &mut raw_net,
-                &mut NetworkerSettings {
-                    host: raw_host,
-                    port,
-                    max_queue,
-                    max_clients: c,
+                    #[cfg(feature = "tls")]
                     cert_file: CString::from_str(cert_file).unwrap().as_ptr(),
+                    #[cfg(feature = "tls")]
                     key_file: CString::from_str(key_file).unwrap().as_ptr(),
                 },
             )
         };
         if result >= 0 {
             return Ok(Networker {
-                primitive_self: raw_net,
+                primitive_self: raw_host,
                 mutex: get_mutex(()),
                 initilized: 1,
             });

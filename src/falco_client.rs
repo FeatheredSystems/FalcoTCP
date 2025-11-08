@@ -108,6 +108,7 @@ impl FalcoClient {
         parameters: Var,
         socket: &SocketAddr,
         timeout: (Duration, Duration, Duration),
+
         #[cfg(feature = "tls")] domain: &str,
 
         retry: bool,

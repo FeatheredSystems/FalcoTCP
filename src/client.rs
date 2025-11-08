@@ -46,7 +46,7 @@ impl Client {
     pub fn new(
         timeout: (Duration, Duration, Duration),
         adr: &SocketAddr,
-        domain: &str,
+        #[cfg(feature = "tls")] domain: &str,
     ) -> Result<Self, Error> {
         let con = TcpStream::connect_timeout(adr, timeout.2)?;
         con.set_read_timeout(Some(timeout.1))?;
