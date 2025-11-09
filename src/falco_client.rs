@@ -35,10 +35,15 @@ impl FalcoClient {
         socket: &SocketAddr,
         timeout: (Duration, Duration, Duration),
         retry: bool,
+        #[cfg(feature = "tls")] domain: &str,
     ) -> Result<Self, Error> {
         let mut v = Vec::with_capacity(clients);
         for _ in 0..clients {
-            v.push(Arc::new(Mutex::new(Client::new(timeout.clone(), socket)?)));
+            v.push(Arc::new(Mutex::new(Client::new(
+                timeout.clone(),
+                socket,
+                domain,
+            )?)));
         }
         #[cfg(feature = "dev-redundancies")]
         v.shrink_to_fit(); // redundant
@@ -48,6 +53,7 @@ impl FalcoClient {
             target: (socket.clone(), timeout),
             clock: Instant::now(),
             retry,
+            domain: domain.to_string(),
         })
     }
     pub fn request(&self, input: Vec<u8>) -> Result<Vec<u8>, Error> {
@@ -95,6 +101,7 @@ impl FalcoClient {
             pool.push(Arc::new(Mutex::new(Client::new(
                 self.target.1,
                 &self.target.0.clone(),
+                &self.domain,
             )?)));
         }
         Ok(())

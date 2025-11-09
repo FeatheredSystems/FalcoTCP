@@ -58,15 +58,17 @@ pub mod heuristics;
 pub mod falco_pipeline;
 
 pub mod enums;
-
+mod test;
 // ===========================================
 // Compression level constants per heuristic
 // ===========================================
 
-#[cfg(feature = "heuristics")]
 pub mod compression_levels {
+    #[cfg(feature = "LZMA")]
     pub const LZMA_LEVEL: usize = 4;
+    #[cfg(feature = "GZIP")]
     pub const GZIP_LEVEL: usize = 5;
+    #[cfg(feature = "ZSTD")]
     pub const ZSTD_LEVEL: usize = 6;
 }
 

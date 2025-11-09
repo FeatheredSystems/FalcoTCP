@@ -2,6 +2,7 @@
 #include <asm-generic/errno.h>
 #include <bits/types.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <openssl/crypto.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -13,7 +14,6 @@
 #include <arpa/inet.h>    
 #include <time.h>
 #include <unistd.h>       
-#include <fcntl.h>      
 #include "numbers.h"
 #include <liburing.h>
 #include "net.h"
@@ -84,6 +84,7 @@ int tls_setup(Networker* self, const char* cert_file, const char* key_file) {
 
     SSL_CTX_set_min_proto_version(self->ssl_ctx, TLS1_3_VERSION);
     SSL_CTX_set_max_proto_version(self->ssl_ctx, TLS1_3_VERSION);
+    SSL_CTX_set_ciphersuites(self->ssl_ctx, "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256");
 
     unsigned char cache_id[] = "cache";
     SSL_CTX_set_session_id_context(self->ssl_ctx, cache_id, sizeof(cache_id));
@@ -359,10 +360,12 @@ int proc(Networker* self){
         int what = cqe->user_data;
         switch(what){
             case OP_Read:
+                self->clients[ptr].activity = now;
                 self->clients[ptr].recv_offset += res;
                 break;
             case OP_Write:
                 self->clients[ptr].writev_offset += res;
+                self->clients[ptr].activity = now;
                 break;
             case OP_SocketAcc:
                 {
@@ -373,12 +376,13 @@ int proc(Networker* self){
                 setsockopt(self->clients[ptr].sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)); 
                 #if __tls__
                     self->clients[ptr].state = TlsHandshake;
+                    fcntl(self->clients[ptr].sock, F_SETFL, O_NONBLOCK);
                 #else
                     self->clients[ptr].state = Idle;
                 #endif
                 self->clients[ptr].activity = now;
                 self->clients[ptr].id = saved_id;
-                fcntl(self->clients[ptr].sock, F_SETFL, O_NONBLOCK);
+                
                 }
                 break;
             default: break;

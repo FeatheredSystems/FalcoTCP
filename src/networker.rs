@@ -93,7 +93,6 @@ impl Networker {
     /// - Port: The port
     /// - Max_queue: The maximum count of sockets that can be left hanging before the server accepts it
     /// - Max_clients: The count of clients that will be priorly allocated
-    #[cfg(not(feature = "tls"))]
     pub fn new(
         host: &str,
         port: u16,
@@ -253,6 +252,12 @@ struct Client {
     pub capacity: u64,
 }
 
+impl Client {
+    pub fn get_id(&self) -> u64 {
+        self.id
+    }
+}
+
 /// A handle to a connected client with a completed request.
 ///
 /// `ClientHandler` provides access to a client that has received its complete request and is ready
@@ -286,16 +291,24 @@ pub struct ClientHandler {
     owner: *mut RawNetworker,
     mutex: *mut Mutex<()>,
 }
-impl Drop for ClientHandler {
+#[allow(let_underscore_lock)]
+impl ClientHandler {
     #[cfg(not(feature = "tokio-runtime"))]
-    fn drop(&mut self) {
-        unsafe { *self.mutex.read().lock().unwrap() };
-        unsafe { kill_client(self.owner, (*self.inner).id) };
+    pub fn kill(self) {
+        unsafe {
+            let _ = (*self.mutex).lock().unwrap();
+            kill_client(self.owner, (*self.inner).id)
+        };
     }
     #[cfg(feature = "tokio-runtime")]
-    fn drop(&mut self) {
-        unsafe { *self.mutex.read().blocking_lock() };
-        unsafe { kill_client(self.owner, (*self.inner).id) };
+    pub async fn kill(self) {
+        unsafe {
+            let _ = (*self.mutex).lock().await;
+            kill_client(self.owner, (*self.inner).id)
+        };
+    }
+    pub fn get_id(&self) -> u64 {
+        unsafe { (*self.inner).get_id() }
     }
 }
 
@@ -437,135 +450,4 @@ unsafe extern "C" {
     fn claim_client(self_: *mut RawNetworker, client_id: u64) -> c_int;
     fn kill_client(self_: *mut RawNetworker, client_id: u64) -> c_int;
     fn cycle(self_: *mut RawNetworker) -> c_int;
-}
-#[test]
-#[cfg(not(feature = "tokio-runtime"))]
-fn run() {
-    use std::sync::{Arc, Mutex};
-    use std::thread::{self, JoinHandle, spawn};
-    use std::time::{Duration, Instant};
-
-    #[cfg(feature = "encryption")]
-    use aes_gcm::{Aes256Gcm, KeyInit};
-    use log::info;
-
-    use crate::falco_pipeline::Var;
-    let var = Var {
-        #[cfg(feature = "encryption")]
-        cipher: Aes256Gcm::new_from_slice(&[2u8; 32]).unwrap(),
-        #[cfg(not(feature = "heuristics"))]
-        compression: crate::enums::CompressionAlgorithm::None,
-    };
-    const WORKERS: usize = 2;
-    const CLIENTS: usize = 2;
-    let mut js: [Option<JoinHandle<_>>; WORKERS + 1] = [const { None }; (WORKERS + 1)];
-    let networker = Arc::new(Mutex::new(
-        Networker::new("127.0.0.1", 8000, 128, WORKERS as u16).unwrap(),
-    ));
-
-    let running = Arc::new(Mutex::new(true));
-
-    // CRITICAL FIX: Cycle thread runs continuously and YIELDS the lock between cycles
-    let cycle_instance = networker.clone();
-    let cycle_running = running.clone();
-    js[WORKERS] = Some(spawn(move || {
-        while *cycle_running.lock().unwrap() {
-            {
-                // Lock, cycle, then IMMEDIATELY drop the lock
-                let mut net = cycle_instance.lock().unwrap();
-                net.cycle();
-            } // Lock dropped here!
-            // Give other threads a chance
-            thread::sleep(Duration::from_micros(100));
-        }
-    }));
-
-    // Start worker threads
-    for i in js.iter_mut().take(WORKERS) {
-        let v = var.clone();
-        let networker = networker.clone();
-        let running = running.clone();
-        *i = Some(thread::spawn(move || {
-            let var = v;
-            while *running.lock().unwrap() {
-                // CRITICAL FIX: Lock briefly, get client, then drop lock immediately
-                let client_opt = {
-                    let mut net = networker.lock().unwrap();
-                    net.get_client()
-                }; // Lock dropped here!
-
-                if let Some(client) = client_opt {
-                    use crate::falco_pipeline::{pipeline_receive, pipeline_send};
-
-                    let request = client.get_request();
-                    let bin = pipeline_receive(request.0.into(), request.1, &var).unwrap();
-                    let response = pipeline_send(bin.iter().map(|f| !f).collect(), &var).unwrap();
-                    client
-                        .apply_response(response.1, response.0.into())
-                        .unwrap();
-                } else {
-                    // No client available, yield
-                    thread::sleep(Duration::from_micros(100));
-                }
-            }
-        }));
-    }
-
-    // Give server time to start accepting connections
-    thread::sleep(Duration::from_millis(500));
-
-    let mut stuff = Vec::new();
-    for _ in 0..CLIENTS {
-        let var = var.clone();
-        stuff.push(spawn(move || {
-            use std::{
-                net::{IpAddr, SocketAddr},
-                str::FromStr,
-            };
-
-            use crate::falco_client::FalcoClient;
-            let socket = SocketAddr::new(IpAddr::from_str("127.0.0.1").unwrap(), 8000);
-            let client = FalcoClient::new(
-                1,
-                var,
-                &socket,
-                (
-                    Duration::from_secs(5), // Increased timeouts
-                    Duration::from_secs(5),
-                    Duration::from_secs(5),
-                ),
-                true,
-            )
-            .unwrap();
-
-            // Reduced iteration count for testing
-            for _ in 0..100 {
-                client
-                    .request(vec![1u8; 1000])
-                    .unwrap()
-                    .iter()
-                    .for_each(|n| assert_eq!(*n, 254));
-            }
-        }));
-    }
-
-    let el = Instant::now();
-
-    // Wait for all client threads to complete
-    for i in stuff {
-        i.join().unwrap()
-    }
-
-    info!("Elapsed time: {:?}ms", el.elapsed().as_millis());
-
-    // Signal the server to stop
-    *running.lock().unwrap() = false;
-
-    // Give server threads time to finish processing
-    thread::sleep(Duration::from_millis(100));
-
-    // Wait for server threads to complete
-    for j in js.into_iter().flatten() {
-        j.join().unwrap();
-    }
 }
