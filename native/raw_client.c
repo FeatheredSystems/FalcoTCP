@@ -1,4 +1,6 @@
 #include <asm-generic/errno.h>
+#include <asm-generic/socket.h>
+#include <bits/types/struct_timeval.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -8,8 +10,7 @@
 #include "net.h"
 
 
-#define BLOCKING 0 
-#define TLS 1
+#define BLOCKING 1 
 
 #if TLS
 #include "openssl/ssl.h"
@@ -59,6 +60,7 @@ typedef struct {
     usize readen;
     usize writen;
     PcAsync processing;
+    usize timeout_micro_secs;
     #endif
 } PrimitiveClient;
 
@@ -84,6 +86,7 @@ int pc_create(PrimitiveClient* self, PrimitiveClientSettings settings){
     *self=s;
     #if !BLOCKING
     self->output = NULL;
+    self->timeout_micro_secs = 1000000;
     #endif
     struct sockaddr_in sets = {0};
     sets.sin_family = AF_INET;
@@ -122,6 +125,20 @@ int pc_create(PrimitiveClient* self, PrimitiveClientSettings settings){
     #endif
     return result;
 }
+
+
+
+void pc_set_timeout(PrimitiveClient *self, usize micro_secs){
+    #if BLOCKING
+    struct timeval tv;
+    tv.tv_usec = micro_secs;
+    setsockopt(self->fd, SOL_SOCKET, SO_RCVTIMEO, (const unsigned char*)&tv, sizeof(tv));
+    setsockopt(self->fd, SOL_SOCKET, SO_SNDTIMEO, (const unsigned char*)&tv, sizeof(tv));
+    #else
+        self->timeout_micro_secs = 1000000;
+    #endif
+}
+
 
 static inline void serialize_message_headers(const MessageHeaders *msg, uint8_t *buf) {
     for (int i = 0; i < 8; i++) {
