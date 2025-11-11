@@ -16,7 +16,7 @@ log = "0.4.28"
 rcgen = "0.14.5"
 
 [features]
-default = ["falco-server","falco-client","complete-compression","tls"]
+default = ["falco-server","falco-client","complete-compression","tls","tokio-runtime"]
 heubias-performance = []
 heubias-balance = []
 heubias-ratio = []

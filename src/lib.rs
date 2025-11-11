@@ -3,7 +3,7 @@ pub mod networker;
 
 #[cfg(any(feature = "server", feature = "client"))]
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct MessageHeaders {
     pub size: u64,
     pub compr_alg: u8,

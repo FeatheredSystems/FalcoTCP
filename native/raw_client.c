@@ -29,12 +29,12 @@
 
 #if !BLOCKING
 enum PCASYNC{
-    PCASYNC_Nothing,
-    PCASYNC_InputHeaders,
-    PCASYNC_InputPayload,
-    PCASYNC_OutputHeaders,
-    PCASYNC_OutputPayload,
-    PCASYNC_Done,
+    PCASYNC_Nothing = 0,
+    PCASYNC_InputHeaders = 1,
+    PCASYNC_InputPayload = 2,
+    PCASYNC_OutputHeaders = 3,
+    PCASYNC_OutputPayload = 4,
+    PCASYNC_Done = 5,
 };
 #endif
 #define sfree(p) \
@@ -343,5 +343,9 @@ void pc_clean(PrimitiveClient* self){
     SSL_free(self->ssl);
     SSL_CTX_free(self->ctx);
     EVP_cleanup();
+    #endif
+    #if !BLOCKING
+    sfree(self->input);
+    sfree(self->output);
     #endif
 }
