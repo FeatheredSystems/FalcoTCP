@@ -26,33 +26,28 @@ typedef struct {
 */
 
 #[repr(i32)]
-#[allow(non_camel_case_types)]
 #[cfg(feature = "async")]
-enum PCASYNC {
-    Nothing = 0,
-    InputHeaders = 1,
-    InputPayload = 2,
-    OutputHeaders = 3,
-    OutputPayload = 4,
+enum Pcasync {
     Done = 5,
 }
 #[repr(C)]
+#[derive(Default)]
 pub struct Client {
-    fd: i32,
+    _fd: i32,
     #[cfg(feature = "tls")]
-    ssl: usize,
+    _ssl: usize,
     #[cfg(feature = "tls")]
-    ssl_context: usize,
+    _ssl_context: usize,
     #[cfg(feature = "async")]
-    input: usize,
+    _input: usize,
     #[cfg(feature = "async")]
-    output: usize,
+    _output: usize,
     #[cfg(feature = "async")]
-    msg_headers: [MessageHeaders; 2],
+    _msg_headers: [MessageHeaders; 2],
     #[cfg(feature = "async")]
-    readen: usize,
+    _readen: usize,
     #[cfg(feature = "async")]
-    writen: usize,
+    _writen: usize,
     #[cfg(feature = "async")]
     processing: i32,
     #[cfg(feature = "async")]
@@ -60,38 +55,7 @@ pub struct Client {
 }
 
 fn zero() -> Client {
-    #[cfg(feature = "async")]
-    let msg_headers = [
-        MessageHeaders {
-            compr_alg: 0,
-            size: 0,
-        },
-        MessageHeaders {
-            compr_alg: 0,
-            size: 0,
-        },
-    ];
-    Client {
-        fd: 0,
-        #[cfg(feature = "tls")]
-        ssl: 0,
-        #[cfg(feature = "tls")]
-        ssl_context: 0,
-        #[cfg(feature = "async")]
-        input: 0,
-        #[cfg(feature = "async")]
-        output: 0,
-        #[cfg(feature = "async")]
-        msg_headers,
-        #[cfg(feature = "async")]
-        readen: 0,
-        #[cfg(feature = "async")]
-        writen: 0,
-        #[cfg(feature = "async")]
-        processing: 0,
-        #[cfg(feature = "async")]
-        timeout_time: 0,
-    }
+    Client::default()
 }
 
 #[repr(C)]
@@ -193,7 +157,7 @@ impl Client {
                     return Err(Error::from_raw_os_error(res));
                 }
             }
-            while self.processing != PCASYNC::Done as i32 {
+            while self.processing != Pcasync::Done as i32 {
                 tokio::task::yield_now().await;
                 let res = unsafe { pc_async_step(self) };
                 if res < 0 {
@@ -217,7 +181,7 @@ impl Client {
                 Ok(a) => a,
                 Err(e) => return Err(e),
             };
-            return Ok(response);
+            Ok(response)
         };
 
         match timeout(Duration::from_micros(cron as u64), action).await {

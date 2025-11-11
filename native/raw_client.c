@@ -14,6 +14,8 @@
 #include <openssl/crypto.h>
 #endif
 
+typedef u64 number;
+
 #if !BLOCKING
 #include <string.h>
 #include <fcntl.h>
@@ -54,10 +56,10 @@ typedef struct {
     unsigned char *input;
     unsigned char *output;
     MessageHeaders headers[2];
-    usize readen;
-    usize writen;
+    u64 readen;
+    u64 writen;
     PcAsync processing;
-    usize timeout_micro_secs;
+    u64 timeout_micro_secs;
     #endif
 } PrimitiveClient;
 
@@ -125,20 +127,20 @@ int pc_create(PrimitiveClient* self, PrimitiveClientSettings settings){
 
 
 
-void pc_set_timeout(PrimitiveClient *self, usize micro_secs){
+void pc_set_timeout(PrimitiveClient *self, u64 micro_secs){
     #if BLOCKING
     struct timeval tv;
     tv.tv_usec = micro_secs;
     setsockopt(self->fd, SOL_SOCKET, SO_RCVTIMEO, (const unsigned char*)&tv, sizeof(tv));
     setsockopt(self->fd, SOL_SOCKET, SO_SNDTIMEO, (const unsigned char*)&tv, sizeof(tv));
     #else
-        self->timeout_micro_secs = 1000000;
+        self->timeout_micro_secs = micro_secs;
     #endif
 }
 
 
 static inline void serialize_message_headers(const MessageHeaders *msg, uint8_t *buf) {
-    for (int i = 0; i < 8; i++) {
+    for (number i = 0; i < 8; i++) {
         buf[i] = (msg->size >> (i * 8)) & 0xFF;
     }
     buf[8] = msg->compr_alg;  
@@ -146,13 +148,13 @@ static inline void serialize_message_headers(const MessageHeaders *msg, uint8_t 
 
 static inline void deserialize_message_headers(const uint8_t *buf, MessageHeaders *msg) {
     msg->size = 0;
-    for (int i = 0; i < 8; i++) {
+    for (number i = 0; i < 8; i++) {
         msg->size |= ((uint64_t)buf[i]) << (i * 8);
     }
     msg->compr_alg = buf[8];
 }
 
-static inline int pc_write(PrimitiveClient *self, unsigned char *restrict buf, usize size){
+static inline int pc_write(PrimitiveClient *self, unsigned char *restrict buf, u64 size){
     #if TLS
         return SSL_write(self->ssl, buf, size);
     #else
@@ -161,7 +163,7 @@ static inline int pc_write(PrimitiveClient *self, unsigned char *restrict buf, u
 }
 
 
-static inline int pc_read(PrimitiveClient *self, unsigned char *restrict buf, usize size){
+static inline int pc_read(PrimitiveClient *self, unsigned char *restrict buf, u64 size){
     #if TLS
         return SSL_read(self->ssl, buf, size);
     #else
@@ -268,9 +270,9 @@ int pc_async_output(PrimitiveClient *self, MessageHeaders *restrict headers, uns
 
 #if BLOCKING
 int pc_input_request(PrimitiveClient *self, unsigned char *restrict buf, MessageHeaders headers){
-    usize written = 0;
+    u64 written = 0;
     int res = 0;
-    usize size = headers.size;
+    u64 size = headers.size;
     {
         unsigned char hbuf[sizeof(headers)];
         serialize_message_headers(&headers, hbuf);
@@ -294,7 +296,7 @@ int pc_input_request(PrimitiveClient *self, unsigned char *restrict buf, Message
 
 #if BLOCKING
 int pc_output_request(PrimitiveClient *self, unsigned char **restrict buf, MessageHeaders *restrict headers){
-    usize readen = 0;
+    u64 readen = 0;
     int res = 0;
     {
         unsigned char buffer[sizeof(MessageHeaders)];
@@ -306,28 +308,13 @@ int pc_output_request(PrimitiveClient *self, unsigned char **restrict buf, Messa
     }
     {
         readen = 0;
-        usize size = headers->size;
+        u64 size = headers->size;
         *buf = malloc(size);
         res = !*buf?-ENOMEM:0;  
         while(readen < size && res >= 0){
             int result = pc_read(self,(*buf+readen), size-readen);
             res = result & -(result < 0);
         }
-    }
-    return res;
-}
-int pc_request(PrimitiveClient *self, unsigned char **restrict inputs, usize *restrict input_sizes, MessageHeaders*restrict input_headers, unsigned char **restrict outputs, MessageHeaders*restrict output_headers, usize request_count){
-    int res = 0;
-    for (int i = 0; i < request_count && res >= 0; i++){
-        int result = pc_input_request(self, inputs[i], input_headers[i]);
-        res = result & -(result < 0);
-    }
-    if(res < 0){
-        return res;
-    }
-    for(int i = 0; i < request_count && res >= 0; i++){
-        int result = pc_output_request(self, &outputs[i], &output_headers[i]);
-        res = result & -(result < 0);
     }
     return res;
 }

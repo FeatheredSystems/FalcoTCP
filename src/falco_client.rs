@@ -8,10 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 #[cfg(feature = "tokio-runtime")]
 use std::sync::Arc;
 #[cfg(feature = "tokio-runtime")]
-use tokio::{
-    sync::{Mutex, RwLock},
-    time::timeout,
-};
+use tokio::sync::{Mutex, RwLock};
 
 pub struct FalcoClient {
     pub var: Var,
@@ -24,7 +21,6 @@ pub struct FalcoClient {
     pool_len: usize,
 }
 
-#[cfg(not(feature = "tokio-runtime"))]
 impl FalcoClient {
     pub fn new(
         clients: usize,
@@ -91,7 +87,7 @@ impl FalcoClient {
                 use std::io::ErrorKind;
 
                 if e.kind() == ErrorKind::ConnectionAborted && allow_mitigation > 0 {
-                    self.mitigate(input, k, allow_mitigation).await
+                    Box::pin(self.mitigate(input, k, allow_mitigation)).await
                 } else {
                     Err(e)
                 }
