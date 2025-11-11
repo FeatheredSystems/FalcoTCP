@@ -6,10 +6,6 @@ use std::{
 };
 
 use crate::MessageHeaders;
-#[cfg(feature = "async")]
-#[cfg(any(feature = "encryption", not(feature = "heuristics")))]
-use crate::falco_pipeline::Var;
-#[cfg(not(feature = "async"))]
 use crate::falco_pipeline::Var;
 /*
 typedef struct {
@@ -31,13 +27,14 @@ typedef struct {
 
 #[repr(i32)]
 #[allow(non_camel_case_types)]
+#[cfg(feature = "async")]
 enum PCASYNC {
-    PCASYNC_Nothing = 0,
-    PCASYNC_InputHeaders = 1,
-    PCASYNC_InputPayload = 2,
-    PCASYNC_OutputHeaders = 3,
-    PCASYNC_OutputPayload = 4,
-    PCASYNC_Done = 5,
+    Nothing = 0,
+    InputHeaders = 1,
+    InputPayload = 2,
+    OutputHeaders = 3,
+    OutputPayload = 4,
+    Done = 5,
 }
 #[repr(C)]
 pub struct Client {
@@ -76,7 +73,9 @@ fn zero() -> Client {
     ];
     Client {
         fd: 0,
+        #[cfg(feature = "tls")]
         ssl: 0,
+        #[cfg(feature = "tls")]
         ssl_context: 0,
         #[cfg(feature = "async")]
         input: 0,
@@ -97,10 +96,10 @@ fn zero() -> Client {
 
 #[repr(C)]
 struct Settings {
-    host: CString,
+    host: *mut i8,
     port: c_ushort,
     #[cfg(feature = "tls")]
-    domain: CString,
+    domain: *mut i8,
 }
 
 /*
@@ -114,21 +113,16 @@ struct Settings {
 } PrimitiveClientSettings;
 */
 impl Client {
-    pub fn new(
-        &self,
-        host: &str,
-        port: u16,
-        #[cfg(feature = "tls")] domain: &str,
-    ) -> Result<Self, Error> {
+    pub fn new(host: &str, port: u16, #[cfg(feature = "tls")] domain: &str) -> Result<Self, Error> {
         let mut settings = Settings {
             host: match CString::from_str(host) {
-                Ok(a) => a,
+                Ok(a) => a.into_raw(),
                 Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
             },
             port,
             #[cfg(feature = "tls")]
             domain: match CString::from_str(domain) {
-                Ok(a) => a,
+                Ok(a) => a.into_raw(),
                 Err(e) => return Err(Error::new(ErrorKind::InvalidInput, e)),
             },
         };
@@ -136,27 +130,20 @@ impl Client {
         let a = unsafe { pc_create(&mut client, &mut settings) };
         if a >= 0 {
             unsafe { pc_set_timeout(&mut client, 1000000) };
-            return Ok(client);
+            Ok(client)
         } else {
-            return Err(Error::from_raw_os_error(a));
+            Err(Error::from_raw_os_error(a))
         }
     }
     pub fn set_timeout(&mut self, micro_secs: usize) {
         unsafe { pc_set_timeout(self, micro_secs) };
     }
     #[cfg(not(feature = "async"))]
-    pub fn request(
-        &mut self,
-        input: &[u8],
-        #[cfg(any(feature = "encryption", not(feature = "heuristics")))] var: &Var,
-    ) -> Result<Vec<u8>, Error> {
+    pub fn request(&mut self, input: &[u8], var: &Var) -> Result<Vec<u8>, Error> {
         use crate::falco_pipeline::{pipeline_receive, pipeline_send};
 
         let input = input.to_vec();
-        let (compression, mut value) = match pipeline_send(input, var) {
-            Ok(a) => a,
-            Err(e) => return Err(e),
-        };
+        let (compression, mut value) = pipeline_send(input, var)?;
         let input_headers = MessageHeaders {
             compr_alg: compression,
             size: value.len() as u64,
@@ -183,11 +170,7 @@ impl Client {
         }
     }
     #[cfg(feature = "async")]
-    pub async fn request(
-        &mut self,
-        input: &[u8],
-        #[cfg(any(feature = "encryption", not(feature = "heuristics")))] var: &Var,
-    ) -> Result<Vec<u8>, Error> {
+    pub async fn request(&mut self, input: &[u8], var: &Var) -> Result<Vec<u8>, Error> {
         let cron = self.timeout_time;
         use tokio::time::timeout;
 
@@ -210,7 +193,7 @@ impl Client {
                     return Err(Error::from_raw_os_error(res));
                 }
             }
-            while self.processing != PCASYNC::PCASYNC_Done as i32 {
+            while self.processing != PCASYNC::Done as i32 {
                 tokio::task::yield_now().await;
                 let res = unsafe { pc_async_step(self) };
                 if res < 0 {

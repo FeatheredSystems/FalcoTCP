@@ -9,9 +9,6 @@
 #include <unistd.h>
 #include "net.h"
 
-
-#define BLOCKING 1 
-
 #if TLS
 #include "openssl/ssl.h"
 #include <openssl/crypto.h>
