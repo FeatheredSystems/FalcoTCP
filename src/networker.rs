@@ -451,3 +451,11 @@ unsafe extern "C" {
     fn kill_client(self_: *mut RawNetworker, client_id: u64) -> c_int;
     fn cycle(self_: *mut RawNetworker) -> c_int;
 }
+#[cfg(all(feature = "server", not(feature = "async")))]
+#[test]
+fn stress_networker() {
+    let mut c = Networker::new("127.0.0.1", 8080, 100, 10).unwrap();
+    for _ in 0..u16::MAX {
+        c.cycle();
+    }
+}

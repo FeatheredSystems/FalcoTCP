@@ -14,9 +14,10 @@ cc = "1.2.41"
 [dev-dependencies]
 log = "0.4.28"
 rcgen = "0.14.5"
+rand = "0.9.2"
 
 [features]
-default = ["falco-client","tokio-runtime"]
+default = ["falco-server","falco-client","encryption"]
 heubias-performance = []
 heubias-balance = []
 heubias-ratio = []

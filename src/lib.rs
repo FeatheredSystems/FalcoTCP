@@ -58,7 +58,6 @@ pub mod heuristics;
 pub mod falco_pipeline;
 
 pub mod enums;
-mod test;
 // ===========================================
 // Compression level constants per heuristic
 // ===========================================

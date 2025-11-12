@@ -169,3 +169,86 @@ impl FalcoClient {
         self.timeout = new_timeout;
     }
 }
+
+#[cfg(all(
+    feature = "falco-server",
+    feature = "falco-client",
+    not(feature = "tls")
+))]
+#[test]
+fn server_client() {
+    #[cfg(not(feature = "heuristics"))]
+    use crate::enums::CompressionAlgorithm;
+    use crate::networker::Networker;
+    #[cfg(feature = "encryption")]
+    use aes_gcm::Aes256Gcm;
+    use aes_gcm::KeyInit;
+    use rand::rngs::OsRng;
+    use std::hash::DefaultHasher;
+    use std::thread::spawn;
+
+    fn get() -> Aes256Gcm {
+        let mut key = [0u8; 32];
+        {
+            use rand::TryRngCore;
+
+            let mut rng = OsRng;
+            rng.try_fill_bytes(&mut key).unwrap();
+        }
+        Aes256Gcm::new_from_slice(&key).unwrap()
+    }
+
+    const MAX_CLIENTS: usize = 2;
+    const NEEDED_REQS: usize = u32::MAX as usize;
+    let var: Var = Var {
+        #[cfg(feature = "encryption")]
+        cipher: get(),
+        #[cfg(not(feature = "heuristics"))]
+        compression: CompressionAlgorithm::None,
+    };
+    let variable = var.clone();
+    let handler0 = spawn(move || {
+        let mut server = Networker::new("127.0.0.1", 12701, 10, MAX_CLIENTS as u16).unwrap();
+        let mut requests = 0;
+        while requests < NEEDED_REQS * MAX_CLIENTS {
+            if let Some(c) = server.get_client() {
+                use std::hash::Hasher;
+
+                use crate::falco_pipeline::{pipeline_receive, pipeline_send};
+
+                let (cmpr, value) = c.get_request();
+                let payload = pipeline_receive(cmpr.into(), value, &variable).unwrap();
+
+                let mut hasher = DefaultHasher::new();
+                hasher.write(&payload);
+                let res = pipeline_send(hasher.finish().to_be_bytes().to_vec(), &variable).unwrap();
+                c.apply_response(res.1, res.0.into()).unwrap();
+                requests += 1;
+            } else {
+                server.cycle();
+            }
+        }
+    });
+
+    let mut handlers = vec![handler0];
+    for _ in 0..MAX_CLIENTS {
+        let variable = var.clone();
+        handlers.push(spawn(move || {
+            use rand::{TryRngCore, random_range};
+
+            let b = FalcoClient::new(1, variable.clone(), "127.0.0.1", 12701).unwrap();
+            let mut rng = OsRng;
+            for _ in 0..NEEDED_REQS {
+                let len = random_range(1..10485760);
+                let mut buffer = vec![0u8; len];
+                rng.try_fill_bytes(&mut buffer).unwrap();
+                let response = b.request(buffer, 255).unwrap();
+                assert_eq!(response.len(), 8);
+            }
+        }));
+    }
+
+    let _ = handlers.into_iter().map(|i| {
+        i.join().unwrap();
+    });
+}
