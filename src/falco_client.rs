@@ -177,16 +177,18 @@ impl FalcoClient {
 ))]
 #[test]
 fn server_client() {
+    info!("SERVER_CLIENT");
     #[cfg(not(feature = "heuristics"))]
     use crate::enums::CompressionAlgorithm;
     use crate::networker::Networker;
     #[cfg(feature = "encryption")]
-    use aes_gcm::Aes256Gcm;
-    use aes_gcm::KeyInit;
+    use aes_gcm::{Aes256Gcm, KeyInit};
+    use log::info;
     use rand::rngs::OsRng;
     use std::hash::DefaultHasher;
     use std::thread::spawn;
 
+    #[cfg(feature = "encryption")]
     fn get() -> Aes256Gcm {
         let mut key = [0u8; 32];
         {
@@ -199,7 +201,7 @@ fn server_client() {
     }
 
     const MAX_CLIENTS: usize = 2;
-    const NEEDED_REQS: usize = u32::MAX as usize;
+    const NEEDED_REQS: usize = u16::MAX as usize;
     let var: Var = Var {
         #[cfg(feature = "encryption")]
         cipher: get(),
@@ -225,6 +227,9 @@ fn server_client() {
                 c.apply_response(res.1, res.0.into()).unwrap();
                 requests += 1;
             } else {
+                use log::info;
+
+                info!("reqs:{}", requests);
                 server.cycle();
             }
         }
