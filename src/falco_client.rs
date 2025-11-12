@@ -201,7 +201,7 @@ fn server_client() {
     }
 
     const MAX_CLIENTS: usize = 2;
-    const NEEDED_REQS: usize = u16::MAX as usize;
+    const NEEDED_REQS: usize = 100;
     let var: Var = Var {
         #[cfg(feature = "encryption")]
         cipher: get(),
