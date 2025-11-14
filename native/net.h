@@ -2,6 +2,7 @@
 #define NETWORKER_H
 
 
+#include "numbers.h"
 #if __tls__
 #include <openssl/crypto.h>
 #endif
@@ -20,6 +21,7 @@ enum State {
     TlsHandshake = -1,
     #endif
     NonExistent = 0,
+    WaitingForAccept = -2,
     Idle = 1,
     HeadersReaden = 2,
     Finished_H = 3,
@@ -32,6 +34,15 @@ enum State {
     Kill = 10,
     Finished_WS = 11,
 };
+
+typedef union{
+    struct{
+        u32 Author;
+        int Operation;
+        
+    };
+    u64 value;
+} UserDataOpt;
 
 // Message headers
 typedef struct {
@@ -95,7 +106,6 @@ typedef struct {
     u64 client_num;
     Client* clients;
     struct io_uring *ring;
-    u64* author_log;
     #if __tls__
     SSL_CTX *ssl_ctx;
     #endif

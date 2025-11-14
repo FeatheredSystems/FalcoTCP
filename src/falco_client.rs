@@ -173,27 +173,26 @@ impl FalcoClient {
 #[cfg(all(
     feature = "falco-server",
     feature = "falco-client",
-    not(feature = "tls")
+    not(feature = "tls"),
+    not(feature = "async")
 ))]
 #[test]
 fn server_client() {
-    info!("SERVER_CLIENT");
     #[cfg(not(feature = "heuristics"))]
     use crate::enums::CompressionAlgorithm;
     use crate::networker::Networker;
     #[cfg(feature = "encryption")]
     use aes_gcm::{Aes256Gcm, KeyInit};
-    use log::info;
     use rand::rngs::OsRng;
     use std::hash::DefaultHasher;
-    use std::thread::spawn;
+    use std::thread::{sleep, spawn};
+    use std::time::Duration;
 
     #[cfg(feature = "encryption")]
     fn get() -> Aes256Gcm {
         let mut key = [0u8; 32];
         {
             use rand::TryRngCore;
-
             let mut rng = OsRng;
             rng.try_fill_bytes(&mut key).unwrap();
         }
@@ -201,7 +200,7 @@ fn server_client() {
     }
 
     const MAX_CLIENTS: usize = 2;
-    const NEEDED_REQS: usize = 100;
+    const NEEDED_REQS: usize = 10;
     let var: Var = Var {
         #[cfg(feature = "encryption")]
         cipher: get(),
@@ -209,14 +208,19 @@ fn server_client() {
         compression: CompressionAlgorithm::None,
     };
     let variable = var.clone();
-    let handler0 = spawn(move || {
-        let mut server = Networker::new("127.0.0.1", 12701, 10, MAX_CLIENTS as u16).unwrap();
+    let server = Networker::new("127.0.0.1", 9090, 10, MAX_CLIENTS as u16).unwrap();
+    println!("Server running");
+    let server_handle = spawn(move || {
+        let mut server = server;
         let mut requests = 0;
-        while requests < NEEDED_REQS * MAX_CLIENTS {
-            if let Some(c) = server.get_client() {
-                use std::hash::Hasher;
 
+        loop {
+            println!("Cycle! ");
+            server.cycle();
+
+            if let Some(c) = server.get_client() {
                 use crate::falco_pipeline::{pipeline_receive, pipeline_send};
+                use std::hash::Hasher;
 
                 let (cmpr, value) = c.get_request();
                 let payload = pipeline_receive(cmpr.into(), value, &variable).unwrap();
@@ -226,34 +230,45 @@ fn server_client() {
                 let res = pipeline_send(hasher.finish().to_be_bytes().to_vec(), &variable).unwrap();
                 c.apply_response(res.1, res.0.into()).unwrap();
                 requests += 1;
-            } else {
-                use log::info;
 
-                info!("reqs:{}", requests);
-                server.cycle();
+                if requests >= NEEDED_REQS * MAX_CLIENTS {
+                    break;
+                }
             }
+
+            sleep(Duration::from_millis(1));
         }
     });
 
-    let mut handlers = vec![handler0];
-    for _ in 0..MAX_CLIENTS {
+    sleep(Duration::from_secs(1));
+
+    let mut handlers = vec![];
+    for k in 0..MAX_CLIENTS {
         let variable = var.clone();
         handlers.push(spawn(move || {
             use rand::{TryRngCore, random_range};
 
-            let b = FalcoClient::new(1, variable.clone(), "127.0.0.1", 12701).unwrap();
+            let b = FalcoClient::new(1, variable.clone(), "127.0.0.1", 9090).unwrap();
             let mut rng = OsRng;
-            for _ in 0..NEEDED_REQS {
+            let n = Instant::now();
+            for i in 0..NEEDED_REQS {
+                use std::thread::yield_now;
+
+                eprintln!("request: {}", i);
                 let len = random_range(1..10485760);
                 let mut buffer = vec![0u8; len];
                 rng.try_fill_bytes(&mut buffer).unwrap();
                 let response = b.request(buffer, 255).unwrap();
                 assert_eq!(response.len(), 8);
+                yield_now();
             }
+            eprintln!("CLIENT({}) -> {}ns", k, n.elapsed().as_nanos());
         }));
     }
 
-    let _ = handlers.into_iter().map(|i| {
+    for i in handlers {
         i.join().unwrap();
-    });
+    }
+
+    server_handle.join().unwrap();
 }

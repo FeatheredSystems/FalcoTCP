@@ -1,6 +1,8 @@
 #include <asm-generic/errno.h>
 #include <asm-generic/socket.h>
 #include <bits/types/struct_timeval.h>
+#include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -79,6 +81,7 @@ struct Packet{
 int pc_create(PrimitiveClient* self, PrimitiveClientSettings settings){
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if(fd == -1){
+        printf("Failed to create the client, socket failed. [fd: %i | exception: 0]\n",fd);
         return -ENONET; 
     }
     PrimitiveClient s={0};
@@ -90,11 +93,18 @@ int pc_create(PrimitiveClient* self, PrimitiveClientSettings settings){
     struct sockaddr_in sets = {0};
     sets.sin_family = AF_INET;
     sets.sin_port = htons(settings.port);
-    inet_pton(AF_INET, settings.host, &sets.sin_addr);
-    int result = connect(fd, (struct sockaddr*)(&sets), sizeof(sets));
-    if(result < 0){
+    int result = inet_pton(AF_INET, settings.host, &sets.sin_addr);
+    if (result < 0){
+        printf("Failed to create the client, inet_pton failed. [result: %i | exception: 1]\n",errno);
         close(fd);
-        return result;
+        return -errno;
+    };
+    result = connect(fd, (struct sockaddr*)(&sets), sizeof(sets));
+    if(result < 0){
+        // exception 2
+        printf("Failed to create the client :( [ result: %i | exception: 2]\n",errno);
+        close(fd);
+        return -errno;
     }
     self->fd = fd;
     #if TLS
@@ -115,14 +125,17 @@ int pc_create(PrimitiveClient* self, PrimitiveClientSettings settings){
     #if !BLOCKING
         int flags= fcntl(fd, F_GETFL,0);
         if(flags < 0){
+            printf("Failed to create the client :( [ result: %i | exception: 3]\n",errno);
             return -1;
         }
         flags |= O_NONBLOCK;
-        if(fcntl(fd, F_SETFL, flags) < 0){
+        result = fcntl(fd, F_SETFL, flags);
+        if(result < 0){
+            printf("Failed to create the client :( [ result: %i | exception: 4]\n",errno);
             return -ENOTSOCK;
         };
     #endif
-    return result;
+    return 0;
 }
 
 

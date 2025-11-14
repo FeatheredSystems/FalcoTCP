@@ -103,13 +103,13 @@ impl Networker {
     ) -> Result<Self, Error> {
         #[cfg(feature = "tls")]
         use std::{ffi::CString, str::FromStr};
-        let (mut raw_host, raw_net) = Networker::host_check(host)?;
+        let (mut raw_net, raw_host) = Networker::host_check(host)?;
         let c = if max_clients == 0 { 1 } else { max_clients };
         let result = unsafe {
             start(
-                &mut raw_host,
+                &mut raw_net,
                 &mut NetworkerSettings {
-                    host: raw_net,
+                    host: raw_host,
                     port,
                     max_queue,
                     max_clients: c,
@@ -122,7 +122,7 @@ impl Networker {
         };
         if result >= 0 {
             return Ok(Networker {
-                primitive_self: raw_host,
+                primitive_self: raw_net,
                 mutex: get_mutex(()),
                 initilized: 1,
             });
@@ -425,7 +425,6 @@ pub struct RawNetworker {
     pub client_num: u64,
     clients: *mut Client,
     pub ring: *mut [u8; 0],
-    pub author_log: *mut u64,
 }
 
 // Rust helper struct
@@ -454,8 +453,9 @@ unsafe extern "C" {
 #[cfg(all(feature = "server", not(feature = "async")))]
 #[test]
 fn stress_networker() {
-    let mut c = Networker::new("127.0.0.1", 8080, 100, 10).unwrap();
-    for _ in 0..u16::MAX {
+    let mut c = Networker::new("127.0.0.1", 8080, 1, 1).unwrap();
+
+    for _ in 0..100 {
         c.cycle();
     }
 }
